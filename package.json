@@ -1,0 +1,26 @@
+{
+  "name": "image-select-web",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c blue,green \"node --watch server/index.js\" \"vite\"",
+    "build": "vite build",
+    "start": "node scripts/seed.mjs && node server/index.js",
+    "db:seed": "node scripts/seed.mjs"
+  },
+  "dependencies": {
+    "express": "^4.22.3",
+    "pg": "^8.23.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "concurrently": "^10.0.5",
+    "vite": "^5.4.2"
+  },
+  "engines": {
+    "node": ">=20.12"
+  }
+}
