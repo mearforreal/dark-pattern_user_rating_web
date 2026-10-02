@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS feedback (
 );
 CREATE INDEX IF NOT EXISTS feedback_session_idx ON feedback (session_id);
 
--- v2: participants sign in with name + email + shared passcode, and rate their
+-- v2: participants sign in with name + email, and rate their
 -- confidence (1-5) in each pick. One session per email (stored lowercased);
 -- signing in again with the same email resumes it. Email is required by the
 -- API but nullable here so rows created while email was removed still load.

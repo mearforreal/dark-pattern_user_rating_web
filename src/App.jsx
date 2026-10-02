@@ -69,7 +69,6 @@ export default function App() {
 function StartForm({ onStart }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [passcode, setPasscode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -78,7 +77,7 @@ function StartForm({ onStart }) {
     setBusy(true);
     setError(null);
     try {
-      onStart(await api.startSession(name, email, passcode));
+      onStart(await api.startSession(name, email));
     } catch (err) {
       setError(err.message);
       setBusy(false);
@@ -90,9 +89,8 @@ function StartForm({ onStart }) {
       <form className="card start" onSubmit={submit}>
         <h1>Human vs. AI UI study</h1>
         <p className="muted">
-          Sign in with your name, email, and the passcode you were given. Your
-          progress is saved as you go: sign in again with the same email to
-          continue where you left off.
+          Sign in with your name and email. Your progress is saved as you go:
+          sign in again with the same email to continue where you left off.
         </p>
         <label className="field">
           <span>Name</span>
@@ -112,16 +110,6 @@ function StartForm({ onStart }) {
             onChange={(e) => setEmail(e.target.value)}
             required
             autoComplete="email"
-          />
-        </label>
-        <label className="field">
-          <span>Passcode</span>
-          <input
-            type="password"
-            value={passcode}
-            onChange={(e) => setPasscode(e.target.value)}
-            required
-            autoComplete="off"
           />
         </label>
         {error && <p className="error">{error}</p>}

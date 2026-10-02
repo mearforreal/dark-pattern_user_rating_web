@@ -12,7 +12,6 @@ const publicDir = path.join(root, "public");
 const distDir = path.join(root, "dist");
 const PORT = Number(process.env.PORT) || 3001;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
-const PARTICIPANT_PASSCODE = process.env.PARTICIPANT_PASSCODE || "";
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -71,16 +70,10 @@ async function buildPlan(sessionId) {
 // ---------------------------------------------------------- participants ---
 
 app.post("/api/sessions", wrap(async (req, res) => {
-  if (!PARTICIPANT_PASSCODE) {
-    return res.status(503).json({ error: "PARTICIPANT_PASSCODE is not configured on the server" });
-  }
   const name = String(req.body?.name || "").trim().slice(0, 200);
   const email = String(req.body?.email || "").trim().toLowerCase().slice(0, 320);
   if (!name) return res.status(400).json({ error: "Name is required" });
   if (!EMAIL_RE.test(email)) return res.status(400).json({ error: "A valid email is required" });
-  if (!safeEqual(req.body?.passcode || "", PARTICIPANT_PASSCODE)) {
-    return res.status(401).json({ error: "Wrong passcode" });
-  }
   // Email is unique: a returning participant gets their existing session back
   // (name and start time are kept) and continues where they left off.
   const { rows: [s] } = await pool.query(
