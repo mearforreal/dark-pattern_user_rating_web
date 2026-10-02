@@ -301,17 +301,29 @@ textarea:focus {
   background: var(--surface);
   border-top: 1px solid var(--line);
 }
-.confidence {
+/* Variant choice (1-4) and confidence (1-5) sit together in one panel. */
+.answer {
+  display: flex;
+  align-items: stretch;
+  gap: 20px;
+  margin: 0 auto;
+  padding: 8px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+}
+.answer-group {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  margin: 0 auto;
   transition: opacity 0.15s;
 }
-.confidence.disabled { opacity: 0.45; }
-.confidence-q { font-size: 13px; font-weight: 600; }
-.confidence-scale { display: flex; gap: 6px; }
+.answer-group.disabled { opacity: 0.45; }
+.answer-divider { width: 1px; background: var(--line); }
+.answer-q { font-size: 13px; font-weight: 600; }
+.answer-scale { display: flex; gap: 6px; }
+.conf.variant { min-width: 56px; }
 .conf {
   display: flex;
   flex-direction: column;
@@ -571,7 +583,9 @@ textarea:focus {
   }
   .instructions { display: none; }
   .controls { flex-wrap: wrap; justify-content: space-between; }
-  .confidence { order: -1; width: 100%; }
+  .answer { order: -1; width: 100%; flex-direction: column; gap: 10px; }
+  .answer-divider { width: auto; height: 1px; }
+  .answer-scale { width: 100%; }
   .conf { min-width: 0; flex: 1; }
   .conf-l { display: none; }
   .who { max-width: 100%; margin-left: 0; }

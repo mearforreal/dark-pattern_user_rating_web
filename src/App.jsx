@@ -345,9 +345,29 @@ function Rater({ data, onSignOut }) {
             <button className="btn" onClick={prev} disabled={idx === 0}>
               ← Prev
             </button>
-            <div className={`confidence${currentChoice ? "" : " disabled"}`}>
-              <span className="confidence-q">How confident are you?</span>
-              <div className="confidence-scale" role="radiogroup" aria-label="Confidence">
+            <div className="answer">
+              <div className="answer-group">
+                <span className="answer-q">Which is the original?</span>
+                <div className="answer-scale" role="radiogroup" aria-label="Original variant">
+                  {group.tiles.map((t, i) => (
+                    <button
+                      key={t.imageId}
+                      role="radio"
+                      aria-checked={currentChoice === t.imageId}
+                      className={`conf variant${currentChoice === t.imageId ? " active" : ""}`}
+                      disabled={saving}
+                      onClick={() => pickTile(t, i + 1)}
+                    >
+                      <span className="conf-n">{i + 1}</span>
+                      <span className="conf-l">Variant</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="answer-divider" aria-hidden="true" />
+              <div className={`answer-group${currentChoice ? "" : " disabled"}`}>
+              <span className="answer-q">How confident are you?</span>
+              <div className="answer-scale" role="radiogroup" aria-label="Confidence">
                 {CONFIDENCE.map((c) => (
                   <button
                     key={c.value}
@@ -361,6 +381,7 @@ function Rater({ data, onSignOut }) {
                     <span className="conf-l">{c.label}</span>
                   </button>
                 ))}
+              </div>
               </div>
             </div>
             <button className="btn" onClick={next} disabled={idx === total - 1}>
