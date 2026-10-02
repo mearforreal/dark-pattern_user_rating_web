@@ -12,8 +12,15 @@ const publicDir = path.join(root, "public");
 const distDir = path.join(root, "dist");
 const PORT = Number(process.env.PORT) || 3001;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
+const PARTICIPANT_PASSCODE = process.env.PARTICIPANT_PASSCODE || "";
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function safeEqual(a, b) {
+  const x = Buffer.from(String(a));
+  const y = Buffer.from(String(b));
+  return x.length === y.length && crypto.timingSafeEqual(x, y);
+}
 
 const app = express();
 app.set("trust proxy", true);
@@ -64,16 +71,26 @@ async function buildPlan(sessionId) {
 // ---------------------------------------------------------- participants ---
 
 app.post("/api/sessions", wrap(async (req, res) => {
+  if (!PARTICIPANT_PASSCODE) {
+    return res.status(503).json({ error: "PARTICIPANT_PASSCODE is not configured on the server" });
+  }
   const name = String(req.body?.name || "").trim().slice(0, 200);
   const email = String(req.body?.email || "").trim().toLowerCase().slice(0, 320);
   if (!name) return res.status(400).json({ error: "Name is required" });
   if (!EMAIL_RE.test(email)) return res.status(400).json({ error: "A valid email is required" });
-  const { rows } = await pool.query(
+  if (!safeEqual(req.body?.passcode || "", PARTICIPANT_PASSCODE)) {
+    return res.status(401).json({ error: "Wrong passcode" });
+  }
+  // Email is unique: a returning participant gets their existing session back
+  // (name and start time are kept) and continues where they left off.
+  const { rows: [s] } = await pool.query(
     `INSERT INTO sessions (name, email, user_agent) VALUES ($1, $2, $3)
-     RETURNING id, name, email, started_at`,
+     ON CONFLICT (email) DO UPDATE SET last_active_at = now()
+     RETURNING id, name, email, started_at, (xmax = 0) AS created`,
     [name, email, String(req.get("user-agent") || "").slice(0, 500)],
   );
-  res.status(201).json(rows[0]);
+  const { created, ...session } = s;
+  res.status(created ? 201 : 200).json({ ...session, resumed: !created });
 }));
 
 async function loadSession(req, res) {
@@ -95,13 +112,15 @@ app.get("/api/sessions/:id", wrap(async (req, res) => {
   if (!s) return;
   const [plan, sel, fb] = await Promise.all([
     buildPlan(s.id),
-    pool.query("SELECT group_stem, image_id FROM selections WHERE session_id = $1", [s.id]),
+    pool.query("SELECT group_stem, image_id, confidence FROM selections WHERE session_id = $1", [s.id]),
     pool.query("SELECT count(*)::int AS n FROM feedback WHERE session_id = $1", [s.id]),
   ]);
   res.json({
     session: { id: s.id, name: s.name, email: s.email, started_at: s.started_at, completed_at: s.completed_at },
     groups: plan,
-    selections: Object.fromEntries(sel.rows.map((r) => [r.group_stem, r.image_id])),
+    selections: Object.fromEntries(
+      sel.rows.map((r) => [r.group_stem, { imageId: r.image_id, confidence: r.confidence }]),
+    ),
     feedbackCount: fb.rows[0].n,
   });
 }));
@@ -113,6 +132,10 @@ app.post("/api/sessions/:id/selections", wrap(async (req, res) => {
   const imageId = Number(req.body?.imageId);
   const tilePosition = Number(req.body?.tilePosition) || null;
   const responseMs = Number.isFinite(req.body?.responseMs) ? Math.round(req.body.responseMs) : null;
+  const confidence = Number(req.body?.confidence);
+  if (!Number.isInteger(confidence) || confidence < 1 || confidence > 5) {
+    return res.status(400).json({ error: "Confidence must be 1-5" });
+  }
 
   const { rows: [img] } = await pool.query(
     "SELECT id, is_ai FROM images WHERE id = $1 AND group_stem = $2",
@@ -121,14 +144,18 @@ app.post("/api/sessions/:id/selections", wrap(async (req, res) => {
   if (!img) return res.status(400).json({ error: "Image does not belong to that group" });
 
   await pool.query(
-    `INSERT INTO selections (session_id, group_stem, image_id, is_ai, tile_position, response_ms)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO selections
+       (session_id, group_stem, image_id, is_ai, tile_position, response_ms, confidence)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      ON CONFLICT (session_id, group_stem) DO UPDATE
        SET image_id = EXCLUDED.image_id, is_ai = EXCLUDED.is_ai,
-           tile_position = EXCLUDED.tile_position, response_ms = EXCLUDED.response_ms,
+           tile_position = EXCLUDED.tile_position,
+           -- a confidence-only edit sends no response time; keep the original
+           response_ms = COALESCE(EXCLUDED.response_ms, selections.response_ms),
+           confidence = EXCLUDED.confidence,
            selected_at = now(),
            changes = selections.changes + (selections.image_id <> EXCLUDED.image_id)::int`,
-    [s.id, groupStem, img.id, img.is_ai, tilePosition, responseMs],
+    [s.id, groupStem, img.id, img.is_ai, tilePosition, responseMs, confidence],
   );
   const { rows: [c] } = await pool.query(
     `UPDATE sessions SET last_active_at = now() WHERE id = $1
@@ -171,9 +198,7 @@ function requireAdmin(req, res, next) {
   if (!ADMIN_PASSWORD) {
     return res.status(503).json({ error: "ADMIN_PASSWORD is not configured on the server" });
   }
-  const given = Buffer.from(String(req.get("x-admin-password") || ""));
-  const expected = Buffer.from(ADMIN_PASSWORD);
-  if (given.length !== expected.length || !crypto.timingSafeEqual(given, expected)) {
+  if (!safeEqual(req.get("x-admin-password") || "", ADMIN_PASSWORD)) {
     return res.status(401).json({ error: "Wrong password" });
   }
   next();
@@ -189,9 +214,10 @@ app.get("/api/admin/stats", wrap(async (_req, res) => {
              (SELECT count(*)::int FROM selections WHERE is_ai) AS ai_picks,
              (SELECT count(*)::int FROM feedback) AS feedback,
              (SELECT count(DISTINCT group_stem)::int FROM images) AS groups,
-             (SELECT round(avg(response_ms))::int FROM selections) AS avg_response_ms`),
+             (SELECT round(avg(response_ms))::int FROM selections) AS avg_response_ms,
+             (SELECT round(avg(confidence), 2)::float FROM selections) AS avg_confidence`),
     pool.query(`
-      SELECT i.variant, count(*)::int AS n
+      SELECT i.variant, count(*)::int AS n, round(avg(s.confidence), 2)::float AS avg_confidence
         FROM selections s JOIN images i ON i.id = s.image_id
        GROUP BY i.variant`),
     pool.query(`
@@ -200,14 +226,17 @@ app.get("/api/admin/stats", wrap(async (_req, res) => {
              count(*) FILTER (WHERE NOT s.is_ai)::int AS original_picks,
              count(*) FILTER (WHERE i.variant = 'A')::int AS a,
              count(*) FILTER (WHERE i.variant = 'B')::int AS b,
-             count(*) FILTER (WHERE i.variant = 'C')::int AS c
+             count(*) FILTER (WHERE i.variant = 'C')::int AS c,
+             round(avg(s.confidence), 2)::float AS avg_confidence
         FROM selections s JOIN images i ON i.id = s.image_id
        GROUP BY s.group_stem
        ORDER BY s.group_stem`),
   ]);
   res.json({
     totals: totals.rows[0],
-    byVariant: Object.fromEntries(byVariant.rows.map((r) => [r.variant, r.n])),
+    byVariant: Object.fromEntries(
+      byVariant.rows.map((r) => [r.variant, { n: r.n, avgConfidence: r.avg_confidence }]),
+    ),
     byGroup: byGroup.rows,
   });
 }));
@@ -219,6 +248,7 @@ app.get("/api/admin/sessions", wrap(async (_req, res) => {
              AS duration_s,
            count(sl.id)::int AS picks,
            count(sl.id) FILTER (WHERE sl.is_ai)::int AS ai_picks,
+           round(avg(sl.confidence), 2)::float AS avg_confidence,
            (SELECT string_agg(f.reason, E'\n---\n' ORDER BY f.created_at)
               FROM feedback f WHERE f.session_id = se.id) AS reason
       FROM sessions se
@@ -234,7 +264,7 @@ app.get("/api/admin/sessions/:id", wrap(async (req, res) => {
   const [sel, fb] = await Promise.all([
     pool.query(`
       SELECT sl.group_stem, sl.image_id, i.name AS image_name, i.variant, sl.is_ai,
-             sl.tile_position, sl.response_ms, sl.changes, sl.selected_at
+             sl.tile_position, sl.response_ms, sl.confidence, sl.changes, sl.selected_at
         FROM selections sl JOIN images i ON i.id = sl.image_id
        WHERE sl.session_id = $1
        ORDER BY sl.selected_at`, [s.id]),
@@ -265,7 +295,7 @@ app.get("/api/admin/export.csv", wrap(async (_req, res) => {
            EXTRACT(EPOCH FROM (COALESCE(se.completed_at, se.last_active_at) - se.started_at))::int
              AS session_duration_s,
            sl.group_stem, i.name AS image_name, i.variant, sl.is_ai,
-           sl.tile_position, sl.response_ms, sl.changes, sl.selected_at,
+           sl.confidence, sl.tile_position, sl.response_ms, sl.changes, sl.selected_at,
            (SELECT string_agg(f.reason, ' | ' ORDER BY f.created_at)
               FROM feedback f WHERE f.session_id = se.id) AS reason
       FROM sessions se

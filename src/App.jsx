@@ -69,6 +69,7 @@ export default function App() {
 function StartForm({ onStart }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [passcode, setPasscode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -77,7 +78,7 @@ function StartForm({ onStart }) {
     setBusy(true);
     setError(null);
     try {
-      onStart(await api.startSession(name, email));
+      onStart(await api.startSession(name, email, passcode));
     } catch (err) {
       setError(err.message);
       setBusy(false);
@@ -87,11 +88,11 @@ function StartForm({ onStart }) {
   return (
     <div className="fill center page-bg">
       <form className="card start" onSubmit={submit}>
-        <h1>Screenshot preference study</h1>
+        <h1>Human vs. AI UI study</h1>
         <p className="muted">
-          You'll see groups of four app screenshots. In each group, pick the one
-          you think looks best. There are no right or wrong answers. Your progress
-          is saved as you go.
+          Sign in with your name, email, and the passcode you were given. Your
+          progress is saved as you go: sign in again with the same email to
+          continue where you left off.
         </p>
         <label className="field">
           <span>Name</span>
@@ -113,6 +114,16 @@ function StartForm({ onStart }) {
             autoComplete="email"
           />
         </label>
+        <label className="field">
+          <span>Passcode</span>
+          <input
+            type="password"
+            value={passcode}
+            onChange={(e) => setPasscode(e.target.value)}
+            required
+            autoComplete="off"
+          />
+        </label>
         {error && <p className="error">{error}</p>}
         <button className="btn primary" type="submit" disabled={busy}>
           {busy ? "Starting…" : "Start"}
@@ -122,16 +133,32 @@ function StartForm({ onStart }) {
   );
 }
 
+const CONFIDENCE = [
+  { value: 1, label: "Not at all" },
+  { value: 2, label: "Slightly" },
+  { value: 3, label: "Moderately" },
+  { value: 4, label: "Quite" },
+  { value: 5, label: "Extremely" },
+];
+
 function Rater({ data, onSignOut }) {
   const { session, groups } = data;
   const total = groups.length;
+  // { [stem]: { imageId, confidence } }, only saved picks
   const [selections, setSelections] = useState(data.selections);
+  // A tile clicked in the current group, waiting for a confidence rating.
+  const [pending, setPending] = useState(null);
+  const [saving, setSaving] = useState(false);
   const [feedbackCount, setFeedbackCount] = useState(data.feedbackCount);
   // Re-ask on load if they reloaded while a prompt was pending.
   const [showFeedback, setShowFeedback] = useState(() =>
     feedbackDue(Object.keys(data.selections).length, data.feedbackCount)
   );
   const [completed, setCompleted] = useState(!!session.completed_at);
+  // Welcome/instructions page: shown before the first rating, and on demand.
+  const [showWelcome, setShowWelcome] = useState(
+    () => Object.keys(data.selections).length === 0 && !session.completed_at
+  );
   const [saveError, setSaveError] = useState(null);
   const [idx, setIdx] = useState(() => {
     const i = groups.findIndex((g) => !data.selections[g.stem]);
@@ -140,12 +167,18 @@ function Rater({ data, onSignOut }) {
 
   const group = groups[idx];
   const done = Object.keys(selections).length;
-  const currentChoice = group ? selections[group.stem] : undefined;
+  const saved = group ? selections[group.stem] : undefined;
+  const currentChoice = pending?.imageId ?? saved?.imageId;
+  const currentPosition = group
+    ? group.tiles.findIndex((t) => t.imageId === currentChoice) + 1
+    : 0;
   const shownAt = useRef(performance.now());
   const advanceTimer = useRef(null);
 
   useEffect(() => {
     shownAt.current = performance.now();
+    setPending(null);
+    setSaveError(null);
   }, [idx]);
 
   useEffect(() => () => clearTimeout(advanceTimer.current), []);
@@ -171,23 +204,41 @@ function Rater({ data, onSignOut }) {
     [idx, total, groups, finishIfDone]
   );
 
-  const choose = useCallback(
-    async (tile, position) => {
-      if (!group || showFeedback) return;
-      const next = { ...selections, [group.stem]: tile.imageId };
-      setSelections(next);
+  const pickTile = useCallback(
+    (tile, position) => {
+      if (!group || showFeedback || saving) return;
+      setSaveError(null);
+      setPending({
+        imageId: tile.imageId,
+        position,
+        responseMs: Math.round(performance.now() - shownAt.current),
+      });
+    },
+    [group, showFeedback, saving]
+  );
+
+  const rateConfidence = useCallback(
+    async (confidence) => {
+      if (!group || showFeedback || saving || !currentChoice) return;
+      const next = { ...selections, [group.stem]: { imageId: currentChoice, confidence } };
+      setSaving(true);
       setSaveError(null);
       try {
         await api.select(session.id, {
           groupStem: group.stem,
-          imageId: tile.imageId,
-          tilePosition: position,
-          responseMs: Math.round(performance.now() - shownAt.current),
+          imageId: currentChoice,
+          tilePosition: currentPosition,
+          responseMs: pending ? pending.responseMs : null,
+          confidence,
         });
       } catch (e) {
         setSaveError(`Your pick was not saved: ${e.message}`);
         return;
+      } finally {
+        setSaving(false);
       }
+      setSelections(next);
+      setPending(null);
       if (feedbackDue(Object.keys(next).length, feedbackCount)) {
         setShowFeedback(true);
         return;
@@ -195,7 +246,8 @@ function Rater({ data, onSignOut }) {
       clearTimeout(advanceTimer.current);
       advanceTimer.current = setTimeout(() => advance(next), 240);
     },
-    [group, showFeedback, selections, session.id, feedbackCount, advance]
+    [group, showFeedback, saving, currentChoice, currentPosition, pending, selections,
+      session.id, feedbackCount, advance]
   );
 
   const onFeedbackDone = () => {
@@ -207,20 +259,26 @@ function Rater({ data, onSignOut }) {
   const prev = useCallback(() => setIdx((i) => Math.max(0, i - 1)), []);
   const next = useCallback(() => setIdx((i) => Math.min(total - 1, i + 1)), [total]);
 
+  // Keys 1–4 pick a screenshot; once one is picked, keys 1–5 rate confidence.
   useEffect(() => {
     const onKey = (e) => {
-      if (showFeedback || completed) return;
+      if (showFeedback || completed || showWelcome) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key >= "1" && e.key <= "4") {
-        const i = Number(e.key) - 1;
-        const t = group?.tiles[i];
-        if (t) choose(t, i + 1);
-      } else if (e.key === "ArrowLeft") prev();
+      if (e.key >= "1" && e.key <= "5") {
+        const n = Number(e.key);
+        if (pending) rateConfidence(n);
+        else if (group?.tiles[n - 1]) pickTile(group.tiles[n - 1], n);
+      } else if (e.key === "Escape") setPending(null);
+      else if (e.key === "ArrowLeft") prev();
       else if (e.key === "ArrowRight") next();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [group, choose, prev, next, showFeedback, completed]);
+  }, [group, pending, pickTile, rateConfidence, prev, next, showFeedback, completed, showWelcome]);
+
+  if (showWelcome && !completed) {
+    return <Welcome total={total} onBegin={() => setShowWelcome(false)} />;
+  }
 
   if (completed) {
     return (
@@ -230,7 +288,7 @@ function Rater({ data, onSignOut }) {
           <p className="muted">
             You rated all {total} groups. Your answers have been recorded.
           </p>
-          <button className="btn" onClick={onSignOut}>Start a new session</button>
+          <button className="btn" onClick={onSignOut}>Sign out</button>
         </div>
       </div>
     );
@@ -247,16 +305,24 @@ function Rater({ data, onSignOut }) {
     );
   }
 
+  const shownConfidence = pending ? null : saved?.confidence;
+  let hint;
+  if (saveError) hint = saveError;
+  else if (pending) hint = `Option ${currentPosition} picked. Now rate your confidence: press 1–5 or click (Esc to undo).`;
+  else if (saved) hint = `Saved: option ${currentPosition}, confidence ${saved.confidence}/5. Click another screenshot or a new confidence to change it.`;
+  else hint = "Select the variant you believe is the original human designed UI: press 1–4 or click.";
+
   return (
     <div className="app">
       <header className="bar">
-        <strong className="brand">Screenshot study</strong>
+        <strong className="brand">Human vs. AI UI study</strong>
         <span className="progress-text">
           Group {idx + 1} of {total} · {done} rated
         </span>
         <span className="who">
-          {session.name} <span className="muted">· {session.email}</span>
+          {session.name} {session.email && <span className="muted">· {session.email}</span>}
         </span>
+        <button className="btn small" onClick={() => setShowWelcome(true)}>Instructions</button>
         <button className="btn small" onClick={onSignOut}>Sign out</button>
       </header>
 
@@ -273,7 +339,7 @@ function Rater({ data, onSignOut }) {
                 <button
                   key={t.imageId}
                   className={`tile${picked ? " picked" : ""}`}
-                  onClick={() => choose(t, i + 1)}
+                  onClick={() => pickTile(t, i + 1)}
                 >
                   <div className="tile-hdr">
                     <span className="num">{i + 1}</span>
@@ -291,42 +357,119 @@ function Rater({ data, onSignOut }) {
             <button className="btn" onClick={prev} disabled={idx === 0}>
               ← Prev
             </button>
-            <div className="pick-buttons">
-              {group.tiles.map((t, i) => (
-                <button
-                  key={t.imageId}
-                  className={currentChoice === t.imageId ? "sel active" : "sel"}
-                  onClick={() => choose(t, i + 1)}
-                >
-                  {i + 1}
-                </button>
-              ))}
+            <div className={`confidence${currentChoice ? "" : " disabled"}`}>
+              <span className="confidence-q">How confident are you?</span>
+              <div className="confidence-scale" role="radiogroup" aria-label="Confidence">
+                {CONFIDENCE.map((c) => (
+                  <button
+                    key={c.value}
+                    role="radio"
+                    aria-checked={shownConfidence === c.value}
+                    className={`conf${shownConfidence === c.value ? " active" : ""}`}
+                    disabled={!currentChoice || saving}
+                    onClick={() => rateConfidence(c.value)}
+                  >
+                    <span className="conf-n">{c.value}</span>
+                    <span className="conf-l">{c.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
             <button className="btn" onClick={next} disabled={idx === total - 1}>
               Next →
             </button>
           </footer>
 
-          <div className={`hint${saveError ? " error" : ""}`}>
-            {saveError ||
-              (currentChoice
-                ? `Picked option ${group.tiles.findIndex((t) => t.imageId === currentChoice) + 1}`
-                : "Pick the best screenshot: press 1–4 or click.")}
-          </div>
+          <div className={`hint${saveError ? " error" : ""}`}>{hint}</div>
         </div>
 
         <aside className="instructions">
           <h3>Instructions</h3>
-          <p>Each group shows four versions of the same app screen.</p>
-          <p>Choose the one you think looks best overall: clarity, layout, readability, and how polished it feels.</p>
-          <p>Use keys <kbd>1</kbd>–<kbd>4</kbd> to pick and <kbd>←</kbd> <kbd>→</kbd> to move between groups. You can change a pick by going back.</p>
-          <p>Every {FEEDBACK_EVERY} groups we'll ask you briefly how you made your choices.</p>
+          <p>Each set shows four variants of the same UI. One is the original human designed UI; the other three are AI generated.</p>
+          <p>Carefully examine all four, then select the variant you believe is the original human designed UI.</p>
+          <p>Then rate your confidence from 1 (not at all confident) to 5 (extremely confident).</p>
+          <p>Keys: <kbd>1</kbd>–<kbd>4</kbd> select a variant, then <kbd>1</kbd>–<kbd>5</kbd> rate confidence. <kbd>←</kbd> <kbd>→</kbd> move between sets.</p>
+          <p>After every {FEEDBACK_EVERY}th set you'll be asked what characteristics influenced your selection.</p>
         </aside>
       </div>
 
       {showFeedback && (
         <FeedbackModal sessionId={session.id} rated={done} onDone={onFeedbackDone} />
       )}
+    </div>
+  );
+}
+
+const CONTACT_EMAIL = "M.S.Nkwo@greenwich.ac.uk";
+const CONTACT_PHONE = "8147317111";
+
+function Welcome({ total, onBegin }) {
+  const checkpoints = [];
+  for (let n = FEEDBACK_EVERY; n <= total; n += FEEDBACK_EVERY) checkpoints.push(n);
+  const list =
+    checkpoints.length > 1
+      ? `${checkpoints.slice(0, -1).join(", ")}, and ${checkpoints.at(-1)}`
+      : checkpoints.join("");
+
+  return (
+    <div className="welcome-page page-bg">
+      <article className="card welcome">
+        <h1>Instructions</h1>
+        <p className="lead">Thank you for participating in this study.</p>
+        <p>
+          Generative AI (GenAI) is increasingly being used by user experience (UX)
+          designers and web developers to create and modify digital user interfaces
+          (UIs). The purpose of this study is to investigate the extent to which
+          people can distinguish between human designed and AI generated user
+          interfaces.
+        </p>
+        <p>
+          Your participation is anonymous. You will not be asked to provide your
+          name or other personally identifiable information.
+        </p>
+
+        <h2>What you will do</h2>
+        <p>
+          You will be presented with {total} sets of UI screenshots. Each set
+          contains four variants (1, 2, 3, and 4):
+        </p>
+        <ul>
+          <li>One is the original human designed UI.</li>
+          <li>The other three are AI generated variants based on the original UI.</li>
+          <li>The four variants will be presented in random order.</li>
+        </ul>
+
+        <p>For each set:</p>
+        <ol type="a">
+          <li>Carefully examine all four UI variants.</li>
+          <li>Select the variant you believe is the original human designed UI.</li>
+          <li>
+            Indicate your confidence in your selection on a scale of 1 (not at all
+            confident) to 5 (extremely confident).
+          </li>
+        </ol>
+
+        {list && (
+          <p>
+            After every {FEEDBACK_EVERY}th set ({list}), you will also be asked to
+            briefly explain what characteristics influenced your selection.
+          </p>
+        )}
+        <p>
+          There are no penalties for incorrect answers. Please make each judgment
+          based on your own assessment of the interfaces.
+        </p>
+        <p className="muted">
+          If you have questions about the study, please email{" "}
+          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> or text{" "}
+          <a href={`sms:${CONTACT_PHONE}`}>{CONTACT_PHONE}</a>.
+        </p>
+
+        <p>Click below to begin the study.</p>
+        <button className="btn primary begin" onClick={onBegin} autoFocus>
+          Begin the study
+        </button>
+      </article>
     </div>
   );
 }
@@ -355,15 +498,17 @@ function FeedbackModal({ sessionId, rated, onDone }) {
       <form className="card modal" onSubmit={submit}>
         <h2 id="fb-title">Quick question</h2>
         <p className="muted">
-          You've rated {rated} groups. What was the reason you chose the last{" "}
-          {FEEDBACK_EVERY} images? What was your decision based on?
+          You've rated {rated} groups.
+        </p>
+        <p className="modal-question">
+          What characteristics of the interface most influenced your decision?
         </p>
         <textarea
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           rows={6}
           autoFocus
-          placeholder="e.g. I picked the ones with the clearest text and least visual clutter…"
+          placeholder="e.g. readable text, clean layout, spacing, colours, icons…"
         />
         {error && <p className="error">{error}</p>}
         <div className="modal-actions">

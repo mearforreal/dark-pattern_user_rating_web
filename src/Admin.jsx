@@ -13,6 +13,9 @@ function fmtDuration(s) {
   const sec = s % 60;
   return h ? `${h}h ${m}m` : m ? `${m}m ${sec}s` : `${sec}s`;
 }
+function fmtConf(v) {
+  return v == null ? "—" : `${Number(v).toFixed(1)} / 5`;
+}
 function pct(n, d) {
   return d ? `${Math.round((n / d) * 100)}%` : "—";
 }
@@ -152,7 +155,7 @@ function Dashboard({ client, onLogout }) {
     const q = query.trim().toLowerCase();
     if (!q) return sessions;
     return sessions.filter(
-      (s) => s.name.toLowerCase().includes(q) || s.email.toLowerCase().includes(q)
+      (s) => s.name.toLowerCase().includes(q) || (s.email || "").includes(q)
     );
   }, [sessions, query]);
 
@@ -198,6 +201,7 @@ function Dashboard({ client, onLogout }) {
                     <th className="num-col">Rated</th>
                     <th className="num-col">AI picks</th>
                     <th className="num-col">Original picks</th>
+                    <th className="num-col">Avg. confidence</th>
                     <th>Status</th>
                     <th>Reason</th>
                   </tr>
@@ -210,12 +214,13 @@ function Dashboard({ client, onLogout }) {
                       onClick={() => setSelected(s.id)}
                     >
                       <td>{s.name}</td>
-                      <td className="muted">{s.email}</td>
+                      <td className="muted">{s.email || "—"}</td>
                       <td>{fmtDate(s.started_at)}</td>
                       <td>{fmtDuration(s.duration_s)}</td>
                       <td className="num-col">{s.picks}{stats ? ` / ${stats.totals.groups}` : ""}</td>
                       <td className="num-col">{s.ai_picks} <span className="muted">({pct(s.ai_picks, s.picks)})</span></td>
                       <td className="num-col">{s.picks - s.ai_picks} <span className="muted">({pct(s.picks - s.ai_picks, s.picks)})</span></td>
+                      <td className="num-col">{fmtConf(s.avg_confidence)}</td>
                       <td>
                         {s.completed_at ? (
                           <span className="badge done">Completed</span>
@@ -261,7 +266,7 @@ function Overview({ stats }) {
     { key: "B", label: "AI variant B" },
     { key: "C", label: "AI variant C" },
   ];
-  const maxN = Math.max(1, ...variants.map((v) => stats.byVariant[v.key] || 0));
+  const maxN = Math.max(1, ...variants.map((v) => stats.byVariant[v.key]?.n || 0));
 
   return (
     <div className="overview">
@@ -270,6 +275,7 @@ function Overview({ stats }) {
         <Stat label="Images rated" value={t.selections} sub={`${t.groups} groups available`} />
         <Stat label="AI variant chosen" value={pct(t.ai_picks, t.selections)} sub={`${t.ai_picks} picks`} />
         <Stat label="Original chosen" value={pct(originalPicks, t.selections)} sub={`${originalPicks} picks · 25% = chance`} />
+        <Stat label="Avg. confidence" value={fmtConf(t.avg_confidence)} sub="1 = not at all, 5 = very" />
         <Stat
           label="Avg. time per pick"
           value={t.avg_response_ms != null ? `${(t.avg_response_ms / 1000).toFixed(1)}s` : "—"}
@@ -281,9 +287,10 @@ function Overview({ stats }) {
         <h2>Picks by image type</h2>
         <div className="hbars">
           {variants.map((v) => {
-            const n = stats.byVariant[v.key] || 0;
+            const n = stats.byVariant[v.key]?.n || 0;
+            const conf = stats.byVariant[v.key]?.avgConfidence;
             return (
-              <div className="hbar-row" key={v.key} title={`${v.label}: ${n} picks (${pct(n, t.selections)})`}>
+              <div className="hbar-row" key={v.key} title={`${v.label}: ${n} picks (${pct(n, t.selections)}), avg. confidence ${fmtConf(conf)}`}>
                 <span className="hbar-label">{v.label}</span>
                 <div className="hbar-track">
                   <div className="hbar-fill" style={{ width: `${(n / maxN) * 100}%` }} />
@@ -291,6 +298,7 @@ function Overview({ stats }) {
                 <span className="hbar-value">
                   {n} <span className="muted">· {pct(n, t.selections)}</span>
                 </span>
+                <span className="hbar-conf muted">conf. {fmtConf(conf)}</span>
               </div>
             );
           })}
@@ -332,6 +340,7 @@ function GroupTable({ rows }) {
                 <th className="num-col">B</th>
                 <th className="num-col">C</th>
                 <th className="num-col">Original rate</th>
+                <th className="num-col">Avg. confidence</th>
               </tr>
             </thead>
             <tbody>
@@ -344,6 +353,7 @@ function GroupTable({ rows }) {
                   <td className="num-col">{r.b}</td>
                   <td className="num-col">{r.c}</td>
                   <td className="num-col">{pct(r.original_picks, r.picks)}</td>
+                  <td className="num-col">{fmtConf(r.avg_confidence)}</td>
                 </tr>
               ))}
             </tbody>
@@ -396,7 +406,7 @@ function SessionDrawer({ id, client, onClose, onDeleted }) {
         ) : (
           <>
             <dl className="meta">
-              <dt>Email</dt><dd>{s.email}</dd>
+              <dt>Email</dt><dd>{s.email || "—"}</dd>
               <dt>Started</dt><dd>{fmtDate(s.started_at)}</dd>
               <dt>Last activity</dt><dd>{fmtDate(s.last_active_at)}</dd>
               <dt>Completed</dt><dd>{fmtDate(s.completed_at)}</dd>
@@ -433,7 +443,7 @@ function SessionDrawer({ id, client, onClose, onDeleted }) {
                       )}
                     </div>
                     <div className="muted small-text">
-                      {fmtDate(r.selected_at)} · tile {r.tile_position ?? "—"} ·{" "}
+                      {fmtDate(r.selected_at)} · confidence {r.confidence ?? "—"}/5 · tile {r.tile_position ?? "—"} ·{" "}
                       {r.response_ms != null ? `${(r.response_ms / 1000).toFixed(1)}s` : "—"}
                       {r.changes > 0 && ` · changed ${r.changes}×`}
                     </div>

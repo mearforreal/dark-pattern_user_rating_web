@@ -301,28 +301,37 @@ textarea:focus {
   background: var(--surface);
   border-top: 1px solid var(--line);
 }
-.pick-buttons {
+.confidence {
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
   margin: 0 auto;
+  transition: opacity 0.15s;
 }
-.pick-buttons .sel {
-  width: 40px;
-  height: 40px;
+.confidence.disabled { opacity: 0.45; }
+.confidence-q { font-size: 13px; font-weight: 600; }
+.confidence-scale { display: flex; gap: 6px; }
+.conf {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 74px;
+  padding: 6px 8px;
   border-radius: 8px;
   border: 1px solid var(--line-strong);
   background: var(--surface);
   color: var(--text);
-  font-weight: 700;
-  font-size: 15px;
+  font: inherit;
   cursor: pointer;
 }
-.pick-buttons .sel:hover { background: #f0f2f5; }
-.pick-buttons .sel.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
+.conf:hover:not(:disabled) { background: #f0f2f5; border-color: var(--accent); }
+.conf:disabled { cursor: default; }
+.conf-n { font-weight: 700; font-size: 15px; }
+.conf-l { font-size: 11px; color: var(--muted); }
+.conf.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.conf.active .conf-l { color: #e6eeff; }
 
 .hint {
   text-align: center;
@@ -332,6 +341,35 @@ textarea:focus {
   font-size: 13px;
 }
 .hint.error { color: var(--danger); }
+
+/* ------------------------------------------------------------- welcome --- */
+.welcome-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 32px 16px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+.welcome {
+  width: 100%;
+  max-width: 680px;
+  padding: 32px 36px;
+  font-size: 15px;
+  line-height: 1.6;
+}
+.welcome h1 { font-size: 24px; margin-bottom: 12px; }
+.welcome h2 { font-size: 17px; margin: 24px 0 8px; }
+.welcome p { margin: 0 0 12px; }
+.welcome .lead { font-weight: 600; }
+.welcome ul,
+.welcome ol { margin: 0 0 14px; padding-left: 22px; }
+.welcome li { margin-bottom: 4px; }
+.welcome a { color: var(--accent); }
+.welcome .begin { margin-top: 8px; padding: 11px 22px; font-size: 15px; }
+@media (max-width: 600px) {
+  .welcome { padding: 22px 18px; }
+}
 
 /* --------------------------------------------------------------- modal --- */
 .modal-backdrop,
@@ -353,6 +391,8 @@ textarea:focus {
   padding: 24px;
 }
 .modal p { margin: 0 0 12px; }
+.modal p.muted { margin-bottom: 4px; }
+.modal-question { font-weight: 600; font-size: 15px; }
 .modal textarea {
   width: 100%;
   resize: vertical;
@@ -406,7 +446,7 @@ textarea:focus {
 .hbars { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
 .hbar-row {
   display: grid;
-  grid-template-columns: 110px 1fr 110px;
+  grid-template-columns: 110px 1fr 100px 100px;
   align-items: center;
   gap: 12px;
 }
@@ -418,7 +458,8 @@ textarea:focus {
   background: var(--accent);
   border-radius: 0 4px 4px 0;
 }
-.hbar-value { font-size: 13px; font-variant-numeric: tabular-nums; }
+.hbar-value,
+.hbar-conf { font-size: 13px; font-variant-numeric: tabular-nums; }
 
 .table-wrap { overflow-x: auto; }
 .table {
@@ -529,5 +570,9 @@ textarea:focus {
     grid-template-columns: repeat(2, var(--tile-w));
   }
   .instructions { display: none; }
+  .controls { flex-wrap: wrap; justify-content: space-between; }
+  .confidence { order: -1; width: 100%; }
+  .conf { min-width: 0; flex: 1; }
+  .conf-l { display: none; }
   .who { max-width: 100%; margin-left: 0; }
 }

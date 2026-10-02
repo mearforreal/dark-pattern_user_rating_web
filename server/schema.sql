@@ -14,7 +14,6 @@ CREATE INDEX IF NOT EXISTS images_group_stem_idx ON images (group_stem);
 CREATE TABLE IF NOT EXISTS sessions (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name            TEXT NOT NULL,
-  email           TEXT NOT NULL,
   user_agent      TEXT,
   started_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   last_active_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -43,3 +42,12 @@ CREATE TABLE IF NOT EXISTS feedback (
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS feedback_session_idx ON feedback (session_id);
+
+-- v2: participants sign in with name + email + shared passcode, and rate their
+-- confidence (1-5) in each pick. One session per email (stored lowercased);
+-- signing in again with the same email resumes it. Email is required by the
+-- API but nullable here so rows created while email was removed still load.
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS email TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS sessions_email_key ON sessions (email);
+ALTER TABLE selections ADD COLUMN IF NOT EXISTS confidence SMALLINT
+  CHECK (confidence BETWEEN 1 AND 5);

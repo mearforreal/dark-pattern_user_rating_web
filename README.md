@@ -1,6 +1,6 @@
 # Screenshot Preference Study
 
-Participants enter their name and email, then see groups of **1 original + 3 AI
+Participants enter their name, email and the shared passcode (the same email resumes their progress), then see groups of **1 original + 3 AI
 variants** (`_A`, `_B`, `_C`) as four tiles in a random order and pick the best one.
 After 10 picks they're asked, once, to explain what their choices were based on.
 Everything is recorded in PostgreSQL and shown at **`/admin`**.
@@ -13,7 +13,7 @@ reveals which tile is the original.
 
 ```bash
 npm install
-cp .env.example .env          # set DATABASE_URL and ADMIN_PASSWORD
+cp .env.example .env          # set DATABASE_URL, ADMIN_PASSWORD, PARTICIPANT_PASSCODE
 createdb image_select         # if using a local Postgres
 npm run db:seed               # create tables + seed the images table
 npm run dev                   # API on :3001, Vite on http://localhost:5180
@@ -29,6 +29,7 @@ Admin panel: http://localhost:5180/admin (password = `ADMIN_PASSWORD`).
 4. On the web service, open **Variables** and add:
    - `DATABASE_URL` = `${{Postgres.DATABASE_URL}}`
    - `ADMIN_PASSWORD` = a strong password
+   - `PARTICIPANT_PASSCODE` = the passcode you give participants
 5. **Settings → Networking → Generate Domain**.
 
 `railway.json` runs `npm run build`, then `npm start`. On every boot, `npm start` runs the
@@ -41,7 +42,7 @@ starts the server. To seed from your laptop instead, copy the Postgres service's
 | Table        | Contents |
 |--------------|----------|
 | `images`     | `name`, `group_stem`, `variant` (original/A/B/C), `is_ai`, `path` |
-| `sessions`   | `name`, `email`, `started_at`, `last_active_at`, `completed_at`, user agent |
+| `sessions`   | `name`, `email` (unique), `started_at`, `last_active_at`, `completed_at`, user agent |
 | `selections` | per session and group: chosen `image_id`, `is_ai`, tile position (1–4), response time (ms), number of changes, `selected_at` |
 | `feedback`   | the free-text reason, and how many picks had been made when it was written |
 
