@@ -245,7 +245,11 @@ function Rater({ data, onSignOut }) {
   };
 
   const prev = useCallback(() => setIdx((i) => Math.max(0, i - 1)), []);
-  const next = useCallback(() => setIdx((i) => Math.min(total - 1, i + 1)), [total]);
+  // Only move forward once the current group has a saved rating.
+  const canNext = !!saved && !saving && idx < total - 1;
+  const next = useCallback(() => {
+    if (canNext) setIdx((i) => i + 1);
+  }, [canNext]);
 
   // Keys 1–4 pick a screenshot; once one is picked, keys 1–5 rate confidence.
   useEffect(() => {
@@ -384,7 +388,7 @@ function Rater({ data, onSignOut }) {
               </div>
               </div>
             </div>
-            <button className="btn" onClick={next} disabled={idx === total - 1}>
+            <button className="btn" onClick={next} disabled={!canNext}>
               Next →
             </button>
           </footer>
