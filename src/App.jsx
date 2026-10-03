@@ -161,15 +161,12 @@ function Rater({ data, onSignOut }) {
     ? group.tiles.findIndex((t) => t.imageId === currentChoice) + 1
     : 0;
   const shownAt = useRef(performance.now());
-  const advanceTimer = useRef(null);
 
   useEffect(() => {
     shownAt.current = performance.now();
     setPending(null);
     setSaveError(null);
   }, [idx]);
-
-  useEffect(() => () => clearTimeout(advanceTimer.current), []);
 
   const finishIfDone = useCallback(
     (sel) => {
@@ -227,29 +224,28 @@ function Rater({ data, onSignOut }) {
       }
       setSelections(next);
       setPending(null);
-      if (feedbackDue(Object.keys(next).length, feedbackCount)) {
-        setShowFeedback(true);
-        return;
-      }
-      clearTimeout(advanceTimer.current);
-      advanceTimer.current = setTimeout(() => advance(next), 240);
+      if (feedbackDue(Object.keys(next).length, feedbackCount)) setShowFeedback(true);
     },
     [group, showFeedback, saving, currentChoice, currentPosition, pending, selections,
-      session.id, feedbackCount, advance]
+      session.id, feedbackCount]
   );
 
   const onFeedbackDone = () => {
     setFeedbackCount((n) => n + 1);
     setShowFeedback(false);
-    advance(selections);
   };
 
   const prev = useCallback(() => setIdx((i) => Math.max(0, i - 1)), []);
-  // Only move forward once the current group has a saved rating.
-  const canNext = !!saved && !saving && idx < total - 1;
+  // Only move forward once the current group has a saved rating. When every
+  // group is rated, Next becomes Finish.
+  const allRated = done >= total;
+  const canNext = !!saved && !saving;
   const next = useCallback(() => {
-    if (canNext) setIdx((i) => i + 1);
-  }, [canNext]);
+    if (!canNext) return;
+    if (allRated) finishIfDone(selections);
+    else if (idx < total - 1) setIdx(idx + 1);
+    else advance(selections);
+  }, [canNext, allRated, idx, total, selections, finishIfDone, advance]);
 
   // Keys 1–4 pick a screenshot; once one is picked, keys 1–5 rate confidence.
   useEffect(() => {
@@ -301,7 +297,7 @@ function Rater({ data, onSignOut }) {
   let hint;
   if (saveError) hint = saveError;
   else if (pending) hint = `Option ${currentPosition} picked. Now rate your confidence: press 1–5 or click (Esc to undo).`;
-  else if (saved) hint = `Saved: option ${currentPosition}, confidence ${saved.confidence}/5. Click another screenshot or a new confidence to change it.`;
+  else if (saved) hint = `Saved: option ${currentPosition}, confidence ${saved.confidence}/5. Press Next to continue, or click another screenshot or confidence to change it.`;
   else hint = "Select the variant you believe is the original human designed UI: press 1–4 or click.";
 
   return (
@@ -346,6 +342,11 @@ function Rater({ data, onSignOut }) {
           </main>
 
           <footer className="controls">
+            <section className="instructions">
+              <p>Each set shows four variants of the same UI. One is the original human designed UI; the other three are AI generated.</p>
+              <p>Carefully examine all four, then select the variant you believe is the original human designed UI.</p>
+              <p>Then rate your confidence from 1 (not at all confident) to 5 (extremely confident).</p>
+            </section>
             <button className="btn" onClick={prev} disabled={idx === 0}>
               ← Prev
             </button>
@@ -389,21 +390,13 @@ function Rater({ data, onSignOut }) {
               </div>
             </div>
             <button className="btn" onClick={next} disabled={!canNext}>
-              Next →
+              {allRated ? "Finish" : "Next →"}
             </button>
           </footer>
 
           <div className={`hint${saveError ? " error" : ""}`}>{hint}</div>
         </div>
 
-        <aside className="instructions">
-          <h3>Instructions</h3>
-          <p>Each set shows four variants of the same UI. One is the original human designed UI; the other three are AI generated.</p>
-          <p>Carefully examine all four, then select the variant you believe is the original human designed UI.</p>
-          <p>Then rate your confidence from 1 (not at all confident) to 5 (extremely confident).</p>
-          <p>Keys: <kbd>1</kbd>–<kbd>4</kbd> select a variant, then <kbd>1</kbd>–<kbd>5</kbd> rate confidence. <kbd>←</kbd> <kbd>→</kbd> move between sets.</p>
-          <p>After every {FEEDBACK_EVERY}th set you'll be asked what characteristics influenced your selection.</p>
-        </aside>
       </div>
 
       {showFeedback && (

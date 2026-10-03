@@ -206,17 +206,14 @@ textarea:focus {
   min-width: 0;
 }
 
+/* Instructions sit at the top of the selection panel, above the answer row. */
 .instructions {
-  width: 200px;
-  flex-shrink: 0;
-  overflow-y: auto;
-  background: var(--surface);
-  border-left: 1px solid var(--line);
-  padding: 14px;
-  font-size: 12.5px;
+  order: -2;
+  flex-basis: 100%;
+  font-size: 13.5px;
+  text-align: center;
 }
-.instructions h3 { margin: 0 0 8px; font-size: 13px; }
-.instructions p { margin: 0 0 10px; color: var(--muted); line-height: 1.45; }
+.instructions p { margin: 0 0 2px; line-height: 1.45; }
 
 .grid {
   --tile-w: 257px;
@@ -295,8 +292,9 @@ textarea:focus {
 
 .controls {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 16px;
+  gap: 10px 16px;
   padding: 10px 16px;
   background: var(--surface);
   border-top: 1px solid var(--line);
@@ -581,7 +579,7 @@ textarea:focus {
     --img-h: 280px;
     grid-template-columns: repeat(2, var(--tile-w));
   }
-  .instructions { display: none; }
+  .instructions { text-align: left; font-size: 13px; }
   .controls { flex-wrap: wrap; justify-content: space-between; }
   .answer { order: -1; width: 100%; flex-direction: column; gap: 10px; }
   .answer-divider { width: auto; height: 1px; }
