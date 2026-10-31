@@ -51,3 +51,7 @@ ALTER TABLE sessions ADD COLUMN IF NOT EXISTS email TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS sessions_email_key ON sessions (email);
 ALTER TABLE selections ADD COLUMN IF NOT EXISTS confidence SMALLINT
   CHECK (confidence BETWEEN 1 AND 5);
+
+-- v3: participants must accept the informed consent form before signing in.
+-- consented_at is set on first sign-in; NULL for sessions created before v3.
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS consented_at TIMESTAMPTZ;

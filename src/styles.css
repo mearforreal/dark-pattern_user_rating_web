@@ -377,6 +377,8 @@ textarea:focus {
 .welcome li { margin-bottom: 4px; }
 .welcome a { color: var(--accent); }
 .welcome .begin { margin-top: 8px; padding: 11px 22px; font-size: 15px; }
+.consent-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+.consent-actions .begin { margin-top: 0; }
 @media (max-width: 600px) {
   .welcome { padding: 22px 18px; }
 }
@@ -515,6 +517,37 @@ textarea:focus {
 .badge.done { background: var(--good-bg); color: var(--good-text); }
 .badge.orig { background: var(--good-bg); color: var(--good-text); }
 .badge.ai { background: var(--ai-bg); color: var(--ai-text); }
+.badge.correct { background: var(--good-bg); color: var(--good-text); }
+.badge.wrong { background: #fdecec; color: var(--danger); }
+.badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.sel-row img.truth { outline: 2px solid var(--good-text); outline-offset: -2px; }
+
+/* Ground truth: each group's four images, original highlighted. */
+.gt-list { display: flex; flex-direction: column; gap: 16px; }
+.gt-stem { font-weight: 600; margin-bottom: 6px; }
+.gt-images {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+.gt-img {
+  margin: 0;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-width: 0;
+}
+.gt-img.original { border: 2px solid var(--good-text); background: var(--good-bg); }
+.gt-img img {
+  display: block;
+  width: 100%;
+  height: 180px;
+  object-fit: contain;
+  background: #f7f8fa;
+  border-radius: 4px;
+}
+.gt-img figcaption { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
+.gt-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .drawer {
   position: absolute;

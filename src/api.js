@@ -14,7 +14,7 @@ async function request(method, url, body, headers = {}) {
 }
 
 export const api = {
-  startSession: (name, email) => request("POST", "/api/sessions", { name, email }),
+  startSession: (name, email) => request("POST", "/api/sessions", { name, email, consent: true }),
   getSession: (id) => request("GET", `/api/sessions/${id}`),
   select: (id, body) => request("POST", `/api/sessions/${id}/selections`, body),
   feedback: (id, reason) => request("POST", `/api/sessions/${id}/feedback`, { reason }),
@@ -30,6 +30,12 @@ export function adminApi(password) {
     deleteSession: (id) => request("DELETE", `/api/admin/sessions/${id}`, null, h),
     exportCsv: async () => {
       const res = await fetch("/api/admin/export.csv", { headers: h });
+      if (!res.ok) throw new Error(`Export failed (${res.status})`);
+      return res.blob();
+    },
+    groundTruth: () => request("GET", "/api/admin/ground-truth", null, h),
+    groundTruthCsv: async () => {
+      const res = await fetch("/api/admin/ground-truth.csv", { headers: h });
       if (!res.ok) throw new Error(`Export failed (${res.status})`);
       return res.blob();
     },

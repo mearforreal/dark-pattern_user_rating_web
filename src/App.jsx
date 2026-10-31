@@ -25,6 +25,7 @@ export default function App() {
   const [sessionId, setSessionId] = useState(readSessionId);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
+  const [consent, setConsent] = useState(null);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -61,9 +62,113 @@ export default function App() {
       </div>
     );
   }
-  if (!sessionId) return <StartForm onStart={start} />;
+  if (!sessionId) {
+    if (consent === "declined") return <ConsentDeclined onBack={() => setConsent(null)} />;
+    if (consent !== "agreed") return <Consent onAnswer={setConsent} />;
+    return <StartForm onStart={start} />;
+  }
   if (!data) return <div className="fill center muted">Loading…</div>;
   return <Rater data={data} onSignOut={signOut} />;
+}
+
+function Consent({ onAnswer }) {
+  return (
+    <div className="welcome-page page-bg">
+      <article className="card welcome">
+        <h1>Informed Consent to Participate in Research</h1>
+        <p>
+          <strong>Study Title:</strong> Human Ability to Distinguish Human-Designed
+          and AI-Generated User Interfaces
+          <br />
+          <strong>Researcher:</strong> Makuochi S Nkwo
+          <br />
+          <strong>Contact:</strong>{" "}
+          <a href="mailto:m.s.nkwo@greenwich.ac.uk">m.s.nkwo@greenwich.ac.uk</a>
+        </p>
+        <p>
+          You are invited to participate in a research study investigating whether
+          people can distinguish between human-designed and AI-generated user
+          interfaces (UIs).
+        </p>
+
+        <h2>What will I do?</h2>
+        <p>
+          You will review 60 sets of UI screenshots. Each set contains four versions
+          of the same interface: one original human-designed UI and three
+          AI-generated variants. You will select the interface you believe was
+          designed by a human and rate your confidence in your selection. At
+          selected points, you will also briefly explain the characteristics that
+          influenced your decision. The study will take approximately 20 minutes to
+          complete.
+        </p>
+
+        <h2>Participation and Risks</h2>
+        <p>
+          Participation is voluntary. You may stop participating at any time without
+          giving a reason or penalty. If you decide to stop, please close the
+          browser; the study will stop. The study involves no more than minimal
+          risk, although you may experience minor fatigue from reviewing multiple
+          screenshots.
+        </p>
+
+        <h2>Privacy and Use of Data</h2>
+        <p>
+          You will be asked to provide a name and email address to access the study
+          web application. The name provided does not need to be your real name.
+          This information is collected solely for login and study administration
+          purposes and will not be included in the research analysis. Your research
+          responses, including your UI selections, confidence ratings, and written
+          explanations, will be used for research and scholarly purposes.
+          Personally identifiable information will not be included in any research
+          reports, presentations, or publications.
+        </p>
+
+        <h2>Consent</h2>
+        <p>By selecting “I Agree” below, I confirm that:</p>
+        <ul>
+          <li>I am 18 years of age or older.</li>
+          <li>
+            I have read and understood the information provided about this study and
+            have had the opportunity to ask questions.
+          </li>
+          <li>
+            I understand that participation is voluntary and that I may stop
+            participating at any time without penalty.
+          </li>
+          <li>
+            I understand that my first name and email address are collected for
+            access and study administration but will not be used in the research
+            analysis.
+          </li>
+          <li>I understand how my research responses will be used.</li>
+          <li>I voluntarily agree to participate in this study.</li>
+        </ul>
+
+        <div className="consent-actions">
+          <button className="btn primary begin" onClick={() => onAnswer("agreed")} autoFocus>
+            I Agree – Begin Study
+          </button>
+          <button className="btn begin" onClick={() => onAnswer("declined")}>
+            I Do Not Agree – Exit
+          </button>
+        </div>
+      </article>
+    </div>
+  );
+}
+
+function ConsentDeclined({ onBack }) {
+  return (
+    <div className="fill center page-bg">
+      <div className="card notice">
+        <h2>Thank you for your time</h2>
+        <p className="muted">
+          You have chosen not to participate. You may now close this browser window.
+        </p>
+        <button className="btn" onClick={onBack}>Back to consent form</button>
+      </div>
+    </div>
+  );
 }
 
 function StartForm({ onStart }) {

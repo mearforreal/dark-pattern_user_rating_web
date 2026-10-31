@@ -74,11 +74,14 @@ app.post("/api/sessions", wrap(async (req, res) => {
   const email = String(req.body?.email || "").trim().toLowerCase().slice(0, 320);
   if (!name) return res.status(400).json({ error: "Name is required" });
   if (!EMAIL_RE.test(email)) return res.status(400).json({ error: "A valid email is required" });
+  if (req.body?.consent !== true) return res.status(400).json({ error: "Consent is required" });
   // Email is unique: a returning participant gets their existing session back
   // (name and start time are kept) and continues where they left off.
   const { rows: [s] } = await pool.query(
-    `INSERT INTO sessions (name, email, user_agent) VALUES ($1, $2, $3)
-     ON CONFLICT (email) DO UPDATE SET last_active_at = now()
+    `INSERT INTO sessions (name, email, user_agent, consented_at) VALUES ($1, $2, $3, now())
+     ON CONFLICT (email) DO UPDATE
+       SET last_active_at = now(),
+           consented_at = COALESCE(sessions.consented_at, now())
      RETURNING id, name, email, started_at, (xmax = 0) AS created`,
     [name, email, String(req.get("user-agent") || "").slice(0, 500)],
   );
@@ -257,8 +260,11 @@ app.get("/api/admin/sessions/:id", wrap(async (req, res) => {
   const [sel, fb] = await Promise.all([
     pool.query(`
       SELECT sl.group_stem, sl.image_id, i.name AS image_name, i.variant, sl.is_ai,
+             NOT sl.is_ai AS correct, o.id AS original_id, o.name AS original_name,
              sl.tile_position, sl.response_ms, sl.confidence, sl.changes, sl.selected_at
-        FROM selections sl JOIN images i ON i.id = sl.image_id
+        FROM selections sl
+        JOIN images i ON i.id = sl.image_id
+        LEFT JOIN images o ON o.group_stem = sl.group_stem AND o.variant = 'original'
        WHERE sl.session_id = $1
        ORDER BY sl.selected_at`, [s.id]),
     pool.query(
@@ -283,22 +289,46 @@ function csvCell(v) {
 
 app.get("/api/admin/export.csv", wrap(async (_req, res) => {
   const { rows } = await pool.query(`
-    SELECT se.id AS session_id, se.name, se.email, se.started_at AS session_started_at,
+    SELECT se.id AS session_id, se.name, se.email, se.consented_at,
+           se.started_at AS session_started_at,
            se.completed_at AS session_completed_at,
            EXTRACT(EPOCH FROM (COALESCE(se.completed_at, se.last_active_at) - se.started_at))::int
              AS session_duration_s,
            sl.group_stem, i.name AS image_name, i.variant, sl.is_ai,
+           NOT sl.is_ai AS correct, o.name AS original_image_name,
            sl.confidence, sl.tile_position, sl.response_ms, sl.changes, sl.selected_at,
            (SELECT string_agg(f.reason, ' | ' ORDER BY f.created_at)
               FROM feedback f WHERE f.session_id = se.id) AS reason
       FROM sessions se
       JOIN selections sl ON sl.session_id = se.id
       JOIN images i ON i.id = sl.image_id
+      LEFT JOIN images o ON o.group_stem = sl.group_stem AND o.variant = 'original'
      ORDER BY se.started_at, sl.selected_at`);
   const cols = rows.length ? Object.keys(rows[0]) : ["session_id"];
   const csv = [cols.join(","), ...rows.map((r) => cols.map((c) => csvCell(r[c])).join(","))].join("\n");
   res.set("Content-Type", "text/csv; charset=utf-8");
   res.set("Content-Disposition", 'attachment; filename="selections.csv"');
+  res.send(csv);
+}));
+
+// Ground truth: every image with whether it is the human original or an AI
+// variant.
+const GROUND_TRUTH_SQL = `
+  SELECT id, group_stem, name, variant, is_ai, path
+    FROM images
+   ORDER BY group_stem, variant <> 'original', variant`;
+
+app.get("/api/admin/ground-truth", wrap(async (_req, res) => {
+  const { rows } = await pool.query(GROUND_TRUTH_SQL);
+  res.json(rows);
+}));
+
+app.get("/api/admin/ground-truth.csv", wrap(async (_req, res) => {
+  const { rows } = await pool.query(GROUND_TRUTH_SQL);
+  const cols = ["group_stem", "name", "variant", "is_ai", "path"];
+  const csv = [cols.join(","), ...rows.map((r) => cols.map((c) => csvCell(r[c])).join(","))].join("\n");
+  res.set("Content-Type", "text/csv; charset=utf-8");
+  res.set("Content-Disposition", 'attachment; filename="ground-truth.csv"');
   res.send(csv);
 }));
 

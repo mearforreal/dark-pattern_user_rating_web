@@ -20,6 +20,15 @@ function pct(n, d) {
   return d ? `${Math.round((n / d) * 100)}%` : "—";
 }
 
+function download(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function Admin() {
   const [password, setPassword] = useState(() => {
     try {
@@ -138,13 +147,14 @@ function Dashboard({ client, onLogout }) {
 
   const exportCsv = async () => {
     try {
-      const blob = await client.exportCsv();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `selections-${new Date().toISOString().slice(0, 10)}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
+      download(await client.exportCsv(), `selections-${new Date().toISOString().slice(0, 10)}.csv`);
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+  const exportGroundTruth = async () => {
+    try {
+      download(await client.groundTruthCsv(), "ground-truth.csv");
     } catch (e) {
       setError(e.message);
     }
@@ -167,6 +177,7 @@ function Dashboard({ client, onLogout }) {
         <div className="bar-actions">
           <button className="btn small" onClick={refresh}>Refresh</button>
           <button className="btn small" onClick={exportCsv}>Export CSV</button>
+          <button className="btn small" onClick={exportGroundTruth}>Ground truth CSV</button>
           <button className="btn small" onClick={onLogout}>Sign out</button>
         </div>
       </header>
@@ -199,8 +210,8 @@ function Dashboard({ client, onLogout }) {
                     <th>Started</th>
                     <th>Session time</th>
                     <th className="num-col">Rated</th>
+                    <th className="num-col">Accuracy</th>
                     <th className="num-col">AI picks</th>
-                    <th className="num-col">Original picks</th>
                     <th className="num-col">Avg. confidence</th>
                     <th>Status</th>
                     <th>Reason</th>
@@ -218,8 +229,11 @@ function Dashboard({ client, onLogout }) {
                       <td>{fmtDate(s.started_at)}</td>
                       <td>{fmtDuration(s.duration_s)}</td>
                       <td className="num-col">{s.picks}{stats ? ` / ${stats.totals.groups}` : ""}</td>
+                      <td className="num-col">
+                        <strong>{pct(s.picks - s.ai_picks, s.picks)}</strong>{" "}
+                        <span className="muted">({s.picks - s.ai_picks}/{s.picks})</span>
+                      </td>
                       <td className="num-col">{s.ai_picks} <span className="muted">({pct(s.ai_picks, s.picks)})</span></td>
-                      <td className="num-col">{s.picks - s.ai_picks} <span className="muted">({pct(s.picks - s.ai_picks, s.picks)})</span></td>
                       <td className="num-col">{fmtConf(s.avg_confidence)}</td>
                       <td>
                         {s.completed_at ? (
@@ -240,6 +254,7 @@ function Dashboard({ client, onLogout }) {
         </section>
 
         {stats && stats.byGroup.length > 0 && <GroupTable rows={stats.byGroup} />}
+        <GroundTruth client={client} />
       </div>
 
       {selected && (
@@ -273,8 +288,8 @@ function Overview({ stats }) {
       <div className="tiles">
         <Stat label="Participants" value={t.sessions} sub={`${t.completed} completed`} />
         <Stat label="Images rated" value={t.selections} sub={`${t.groups} groups available`} />
+        <Stat label="Accuracy" value={pct(originalPicks, t.selections)} sub={`${originalPicks} of ${t.selections} correct · 25% = chance`} />
         <Stat label="AI variant chosen" value={pct(t.ai_picks, t.selections)} sub={`${t.ai_picks} picks`} />
-        <Stat label="Original chosen" value={pct(originalPicks, t.selections)} sub={`${originalPicks} picks · 25% = chance`} />
         <Stat label="Avg. confidence" value={fmtConf(t.avg_confidence)} sub="1 = not at all, 5 = very" />
         <Stat
           label="Avg. time per pick"
@@ -335,11 +350,11 @@ function GroupTable({ rows }) {
               <tr>
                 <th>Group</th>
                 <th className="num-col">Picks</th>
-                <th className="num-col">Original</th>
+                <th className="num-col">Original (correct)</th>
                 <th className="num-col">A</th>
                 <th className="num-col">B</th>
                 <th className="num-col">C</th>
-                <th className="num-col">Original rate</th>
+                <th className="num-col">Accuracy</th>
                 <th className="num-col">Avg. confidence</th>
               </tr>
             </thead>
@@ -358,6 +373,76 @@ function GroupTable({ rows }) {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+const VARIANT_LABEL = { original: "Original", A: "AI A", B: "AI B", C: "AI C" };
+
+function GroundTruth({ client }) {
+  const [open, setOpen] = useState(false);
+  const [rows, setRows] = useState(null);
+  const [error, setError] = useState(null);
+  const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    if (!open || rows) return;
+    client.groundTruth().then(setRows).catch((e) => setError(e.message));
+  }, [open, rows, client]);
+
+  const groups = useMemo(() => {
+    if (!rows) return [];
+    const q = query.trim().toLowerCase();
+    const map = new Map();
+    for (const r of rows) {
+      if (q && !r.group_stem.toLowerCase().includes(q) && !r.name.toLowerCase().includes(q)) continue;
+      if (!map.has(r.group_stem)) map.set(r.group_stem, []);
+      map.get(r.group_stem).push(r);
+    }
+    return [...map];
+  }, [rows, query]);
+
+  return (
+    <section className="card section">
+      <div className="section-hdr">
+        <h2>Ground truth</h2>
+        {open && (
+          <input
+            className="search"
+            placeholder="Search group or file"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        )}
+        <button className="btn small" onClick={() => setOpen((o) => !o)}>
+          {open ? "Hide" : "Show all images"}
+        </button>
+      </div>
+      {open && error && <p className="error">{error}</p>}
+      {open && !rows && !error && <p className="muted">Loading…</p>}
+      {open && rows && (
+        <div className="gt-list">
+          {groups.map(([stem, imgs]) => (
+            <div className="gt-group" key={stem}>
+              <div className="mono gt-stem">{stem}</div>
+              <div className="gt-images">
+                {imgs.map((img) => (
+                  <figure key={img.id} className={`gt-img${img.is_ai ? "" : " original"}`}>
+                    <img src={`/img/${img.id}`} alt={img.name} loading="lazy" />
+                    <figcaption>
+                      <span className={`badge ${img.is_ai ? "ai" : "orig"}`}>
+                        {VARIANT_LABEL[img.variant] || img.variant}
+                      </span>
+                      <span className="mono small-text gt-name" title={img.name}>{img.name}</span>
+                    </figcaption>
+                  </figure>
+                ))}
+              </div>
+            </div>
+          ))}
+          {groups.length === 0 && <p className="muted">No matching groups.</p>}
         </div>
       )}
     </section>
@@ -392,6 +477,7 @@ function SessionDrawer({ id, client, onClose, onDeleted }) {
   const s = data?.session;
   const end = s ? s.completed_at || s.last_active_at : null;
   const duration = s ? Math.round((new Date(end) - new Date(s.started_at)) / 1000) : null;
+  const correct = data ? data.selections.filter((r) => r.correct).length : 0;
 
   return (
     <div className="drawer-backdrop" onClick={onClose}>
@@ -407,10 +493,16 @@ function SessionDrawer({ id, client, onClose, onDeleted }) {
           <>
             <dl className="meta">
               <dt>Email</dt><dd>{s.email || "—"}</dd>
+              <dt>Consented</dt><dd>{fmtDate(s.consented_at)}</dd>
               <dt>Started</dt><dd>{fmtDate(s.started_at)}</dd>
               <dt>Last activity</dt><dd>{fmtDate(s.last_active_at)}</dd>
               <dt>Completed</dt><dd>{fmtDate(s.completed_at)}</dd>
               <dt>Session time</dt><dd>{fmtDuration(duration)}</dd>
+              <dt>Accuracy</dt>
+              <dd>
+                {pct(correct, data.selections.length)}{" "}
+                <span className="muted">({correct} of {data.selections.length} correct)</span>
+              </dd>
               <dt>Session ID</dt><dd className="mono">{s.id}</dd>
             </dl>
 
@@ -432,16 +524,35 @@ function SessionDrawer({ id, client, onClose, onDeleted }) {
             <div className="sel-list">
               {data.selections.map((r) => (
                 <div className="sel-row" key={r.group_stem}>
-                  <img src={`/img/${r.image_id}`} alt="" loading="lazy" />
+                  <img src={`/img/${r.image_id}`} alt="picked" title="Picked" loading="lazy" />
+                  {!r.correct && r.original_id && (
+                    <img
+                      className="truth"
+                      src={`/img/${r.original_id}`}
+                      alt="original"
+                      title="Original (ground truth)"
+                      loading="lazy"
+                    />
+                  )}
                   <div className="sel-info">
                     <div className="mono">{r.image_name}</div>
-                    <div>
-                      {r.is_ai ? (
-                        <span className="badge ai">AI variant {r.variant}</span>
+                    <div className="badges">
+                      {r.correct ? (
+                        <span className="badge correct">Correct</span>
                       ) : (
-                        <span className="badge orig">Original</span>
+                        <span className="badge wrong">Wrong</span>
+                      )}
+                      {r.is_ai ? (
+                        <span className="badge ai">Picked AI variant {r.variant}</span>
+                      ) : (
+                        <span className="badge orig">Picked original</span>
                       )}
                     </div>
+                    {!r.correct && r.original_name && (
+                      <div className="muted small-text">
+                        Original: <span className="mono">{r.original_name}</span>
+                      </div>
+                    )}
                     <div className="muted small-text">
                       {fmtDate(r.selected_at)} · confidence {r.confidence ?? "—"}/5 · tile {r.tile_position ?? "—"} ·{" "}
                       {r.response_ms != null ? `${(r.response_ms / 1000).toFixed(1)}s` : "—"}
