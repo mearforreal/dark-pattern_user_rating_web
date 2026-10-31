@@ -5,7 +5,8 @@ const SESSION_KEY = "image-select-session-id";
 const FEEDBACK_EVERY = 10;
 
 // A reason is due after every FEEDBACK_EVERY rated groups (10, 20, 30, …).
-const feedbackDue = (rated, given) => Math.floor(rated / FEEDBACK_EVERY) > given;
+const feedbackDue = (rated, given) =>
+  Math.floor(rated / FEEDBACK_EVERY) > given;
 
 function readSessionId() {
   try {
@@ -57,13 +58,16 @@ export default function App() {
         <div className="card notice">
           <h2>Something went wrong</h2>
           <p className="muted">{error}</p>
-          <button className="btn" onClick={() => location.reload()}>Try again</button>
+          <button className="btn" onClick={() => location.reload()}>
+            Try again
+          </button>
         </div>
       </div>
     );
   }
   if (!sessionId) {
-    if (consent === "declined") return <ConsentDeclined onBack={() => setConsent(null)} />;
+    if (consent === "declined")
+      return <ConsentDeclined onBack={() => setConsent(null)} />;
     if (consent !== "agreed") return <Consent onAnswer={setConsent} />;
     return <StartForm onStart={start} />;
   }
@@ -77,8 +81,8 @@ function Consent({ onAnswer }) {
       <article className="card welcome">
         <h1>Informed Consent to Participate in Research</h1>
         <p>
-          <strong>Study Title:</strong> Human Ability to Distinguish Human-Designed
-          and AI-Generated User Interfaces
+          <strong>Study Title:</strong> Human Ability to Distinguish
+          Human-Designed and AI-Generated User Interfaces
           <br />
           <strong>Researcher:</strong> Makuochi S Nkwo
           <br />
@@ -86,41 +90,45 @@ function Consent({ onAnswer }) {
           <a href="mailto:m.s.nkwo@greenwich.ac.uk">m.s.nkwo@greenwich.ac.uk</a>
         </p>
         <p>
-          You are invited to participate in a research study investigating whether
-          people can distinguish between human-designed and AI-generated user
-          interfaces (UIs).
+          You are invited to participate in a research study investigating
+          whether people can distinguish between human-designed and AI-generated
+          user interfaces (UIs).
         </p>
 
         <h2>What will I do?</h2>
         <p>
-          You will review 60 sets of UI screenshots. Each set contains four versions
-          of the same interface: one original human-designed UI and three
-          AI-generated variants. You will select the interface you believe was
-          designed by a human and rate your confidence in your selection. At
-          selected points, you will also briefly explain the characteristics that
-          influenced your decision. The study will take approximately 20 minutes to
-          complete.
+          You will review 60 sets of UI screenshots. Each set contains four
+          versions of the same interface: one original human-designed UI and
+          three AI-generated variants. You will select the interface you believe
+          was designed by a human and rate your confidence in your selection. At
+          selected points, you will also briefly explain the characteristics
+          that influenced your decision. The study will take approximately 20
+          minutes to complete.
         </p>
 
         <h2>Participation and Risks</h2>
         <p>
-          Participation is voluntary. You may stop participating at any time without
-          giving a reason or penalty. If you decide to stop, please close the
-          browser; the study will stop. The study involves no more than minimal
-          risk, although you may experience minor fatigue from reviewing multiple
-          screenshots.
+          Participation is voluntary. You may stop participating at any time
+          without giving a reason or penalty. If you decide to stop, please
+          close the browser; the study will stop. The study involves no more
+          than minimal risk, although you may experience minor fatigue from
+          reviewing multiple screenshots.
         </p>
 
         <h2>Privacy and Use of Data</h2>
         <p>
-          You will be asked to provide a name and email address to access the study
-          web application. The name provided does not need to be your real name.
-          This information is collected solely for login and study administration
-          purposes and will not be included in the research analysis. Your research
-          responses, including your UI selections, confidence ratings, and written
-          explanations, will be used for research and scholarly purposes.
-          Personally identifiable information will not be included in any research
-          reports, presentations, or publications.
+          You will be asked to provide a name and email address to access the
+          study web application. The name provided does not need to be your real
+          name. This information is collected solely for login and study
+          administration purposes and will not be included in the research
+          analysis. Your research responses, including your UI selections,
+          confidence ratings, and written explanations, will be used for
+          research and scholarly purposes. Personally identifiable information
+          will not be included in any research reports, presentations, or
+          publications. Research data will be securely stored on a
+          password-protected storage system accessible only to the research team
+          and will be retained for a maximum of 3 years following completion of
+          the study, after which it will be securely deleted.
         </p>
 
         <h2>Consent</h2>
@@ -128,8 +136,8 @@ function Consent({ onAnswer }) {
         <ul>
           <li>I am 18 years of age or older.</li>
           <li>
-            I have read and understood the information provided about this study and
-            have had the opportunity to ask questions.
+            I have read and understood the information provided about this study
+            and have had the opportunity to ask questions.
           </li>
           <li>
             I understand that participation is voluntary and that I may stop
@@ -145,7 +153,11 @@ function Consent({ onAnswer }) {
         </ul>
 
         <div className="consent-actions">
-          <button className="btn primary begin" onClick={() => onAnswer("agreed")} autoFocus>
+          <button
+            className="btn primary begin"
+            onClick={() => onAnswer("agreed")}
+            autoFocus
+          >
             I Agree – Begin Study
           </button>
           <button className="btn begin" onClick={() => onAnswer("declined")}>
@@ -163,9 +175,12 @@ function ConsentDeclined({ onBack }) {
       <div className="card notice">
         <h2>Thank you for your time</h2>
         <p className="muted">
-          You have chosen not to participate. You may now close this browser window.
+          You have chosen not to participate. You may now close this browser
+          window.
         </p>
-        <button className="btn" onClick={onBack}>Back to consent form</button>
+        <button className="btn" onClick={onBack}>
+          Back to consent form
+        </button>
       </div>
     </div>
   );
@@ -245,12 +260,12 @@ function Rater({ data, onSignOut }) {
   const [feedbackCount, setFeedbackCount] = useState(data.feedbackCount);
   // Re-ask on load if they reloaded while a prompt was pending.
   const [showFeedback, setShowFeedback] = useState(() =>
-    feedbackDue(Object.keys(data.selections).length, data.feedbackCount)
+    feedbackDue(Object.keys(data.selections).length, data.feedbackCount),
   );
   const [completed, setCompleted] = useState(!!session.completed_at);
   // Welcome/instructions page: shown before the first rating, and on demand.
   const [showWelcome, setShowWelcome] = useState(
-    () => Object.keys(data.selections).length === 0 && !session.completed_at
+    () => Object.keys(data.selections).length === 0 && !session.completed_at,
   );
   const [saveError, setSaveError] = useState(null);
   const [idx, setIdx] = useState(() => {
@@ -280,7 +295,7 @@ function Rater({ data, onSignOut }) {
         setCompleted(true);
       }
     },
-    [total, completed, session.id]
+    [total, completed, session.id],
   );
 
   const advance = useCallback(
@@ -291,7 +306,7 @@ function Rater({ data, onSignOut }) {
       }
       finishIfDone(sel);
     },
-    [idx, total, groups, finishIfDone]
+    [idx, total, groups, finishIfDone],
   );
 
   const pickTile = useCallback(
@@ -304,13 +319,16 @@ function Rater({ data, onSignOut }) {
         responseMs: Math.round(performance.now() - shownAt.current),
       });
     },
-    [group, showFeedback, saving]
+    [group, showFeedback, saving],
   );
 
   const rateConfidence = useCallback(
     async (confidence) => {
       if (!group || showFeedback || saving || !currentChoice) return;
-      const next = { ...selections, [group.stem]: { imageId: currentChoice, confidence } };
+      const next = {
+        ...selections,
+        [group.stem]: { imageId: currentChoice, confidence },
+      };
       setSaving(true);
       setSaveError(null);
       try {
@@ -329,10 +347,20 @@ function Rater({ data, onSignOut }) {
       }
       setSelections(next);
       setPending(null);
-      if (feedbackDue(Object.keys(next).length, feedbackCount)) setShowFeedback(true);
+      if (feedbackDue(Object.keys(next).length, feedbackCount))
+        setShowFeedback(true);
     },
-    [group, showFeedback, saving, currentChoice, currentPosition, pending, selections,
-      session.id, feedbackCount]
+    [
+      group,
+      showFeedback,
+      saving,
+      currentChoice,
+      currentPosition,
+      pending,
+      selections,
+      session.id,
+      feedbackCount,
+    ],
   );
 
   const onFeedbackDone = () => {
@@ -367,7 +395,17 @@ function Rater({ data, onSignOut }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [group, pending, pickTile, rateConfidence, prev, next, showFeedback, completed, showWelcome]);
+  }, [
+    group,
+    pending,
+    pickTile,
+    rateConfidence,
+    prev,
+    next,
+    showFeedback,
+    completed,
+    showWelcome,
+  ]);
 
   if (showWelcome && !completed) {
     return <Welcome total={total} onBegin={() => setShowWelcome(false)} />;
@@ -381,7 +419,9 @@ function Rater({ data, onSignOut }) {
           <p className="muted">
             You rated all {total} groups. Your answers have been recorded.
           </p>
-          <button className="btn" onClick={onSignOut}>Sign out</button>
+          <button className="btn" onClick={onSignOut}>
+            Sign out
+          </button>
         </div>
       </div>
     );
@@ -392,7 +432,9 @@ function Rater({ data, onSignOut }) {
       <div className="fill center">
         <div className="card notice">
           <h2>No images available</h2>
-          <p className="muted">Run <code>npm run db:seed</code> to load the image groups.</p>
+          <p className="muted">
+            Run <code>npm run db:seed</code> to load the image groups.
+          </p>
         </div>
       </div>
     );
@@ -401,9 +443,13 @@ function Rater({ data, onSignOut }) {
   const shownConfidence = pending ? null : saved?.confidence;
   let hint;
   if (saveError) hint = saveError;
-  else if (pending) hint = `Option ${currentPosition} picked. Now rate your confidence: press 1–5 or click (Esc to undo).`;
-  else if (saved) hint = `Saved: option ${currentPosition}, confidence ${saved.confidence}/5. Press Next to continue, or click another screenshot or confidence to change it.`;
-  else hint = "Select the variant you believe is the original human designed UI: press 1–4 or click.";
+  else if (pending)
+    hint = `Option ${currentPosition} picked. Now rate your confidence: press 1–5 or click (Esc to undo).`;
+  else if (saved)
+    hint = `Saved: option ${currentPosition}, confidence ${saved.confidence}/5. Press Next to continue, or click another screenshot or confidence to change it.`;
+  else
+    hint =
+      "Select the variant you believe is the original human designed UI: press 1–4 or click.";
 
   return (
     <div className="app">
@@ -413,14 +459,22 @@ function Rater({ data, onSignOut }) {
           Group {idx + 1} of {total} · {done} rated
         </span>
         <span className="who">
-          {session.name} {session.email && <span className="muted">· {session.email}</span>}
+          {session.name}{" "}
+          {session.email && <span className="muted">· {session.email}</span>}
         </span>
-        <button className="btn small" onClick={() => setShowWelcome(true)}>Instructions</button>
-        <button className="btn small" onClick={onSignOut}>Sign out</button>
+        <button className="btn small" onClick={() => setShowWelcome(true)}>
+          Instructions
+        </button>
+        <button className="btn small" onClick={onSignOut}>
+          Sign out
+        </button>
       </header>
 
       <div className="pbar">
-        <div className="pbar-fill" style={{ width: `${(done / total) * 100}%` }} />
+        <div
+          className="pbar-fill"
+          style={{ width: `${(done / total) * 100}%` }}
+        />
       </div>
 
       <div className="body">
@@ -448,9 +502,18 @@ function Rater({ data, onSignOut }) {
 
           <footer className="controls">
             <section className="instructions">
-              <p>Each set shows four variants of the same UI. One is the original human designed UI; the other three are AI generated.</p>
-              <p>Carefully examine all four, then select the variant you believe is the original human designed UI.</p>
-              <p>Then rate your confidence from 1 (not at all confident) to 5 (extremely confident).</p>
+              <p>
+                Each set shows four variants of the same UI. One is the original
+                human designed UI; the other three are AI generated.
+              </p>
+              <p>
+                Carefully examine all four, then select the variant you believe
+                is the original human designed UI.
+              </p>
+              <p>
+                Then rate your confidence from 1 (not at all confident) to 5
+                (extremely confident).
+              </p>
             </section>
             <button className="btn" onClick={prev} disabled={idx === 0}>
               ← Prev
@@ -458,7 +521,11 @@ function Rater({ data, onSignOut }) {
             <div className="answer">
               <div className="answer-group">
                 <span className="answer-q">Which is the original?</span>
-                <div className="answer-scale" role="radiogroup" aria-label="Original variant">
+                <div
+                  className="answer-scale"
+                  role="radiogroup"
+                  aria-label="Original variant"
+                >
                   {group.tiles.map((t, i) => (
                     <button
                       key={t.imageId}
@@ -475,23 +542,29 @@ function Rater({ data, onSignOut }) {
                 </div>
               </div>
               <div className="answer-divider" aria-hidden="true" />
-              <div className={`answer-group${currentChoice ? "" : " disabled"}`}>
-              <span className="answer-q">How confident are you?</span>
-              <div className="answer-scale" role="radiogroup" aria-label="Confidence">
-                {CONFIDENCE.map((c) => (
-                  <button
-                    key={c.value}
-                    role="radio"
-                    aria-checked={shownConfidence === c.value}
-                    className={`conf${shownConfidence === c.value ? " active" : ""}`}
-                    disabled={!currentChoice || saving}
-                    onClick={() => rateConfidence(c.value)}
-                  >
-                    <span className="conf-n">{c.value}</span>
-                    <span className="conf-l">{c.label}</span>
-                  </button>
-                ))}
-              </div>
+              <div
+                className={`answer-group${currentChoice ? "" : " disabled"}`}
+              >
+                <span className="answer-q">How confident are you?</span>
+                <div
+                  className="answer-scale"
+                  role="radiogroup"
+                  aria-label="Confidence"
+                >
+                  {CONFIDENCE.map((c) => (
+                    <button
+                      key={c.value}
+                      role="radio"
+                      aria-checked={shownConfidence === c.value}
+                      className={`conf${shownConfidence === c.value ? " active" : ""}`}
+                      disabled={!currentChoice || saving}
+                      onClick={() => rateConfidence(c.value)}
+                    >
+                      <span className="conf-n">{c.value}</span>
+                      <span className="conf-l">{c.label}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
             <button className="btn" onClick={next} disabled={!canNext}>
@@ -501,11 +574,14 @@ function Rater({ data, onSignOut }) {
 
           <div className={`hint${saveError ? " error" : ""}`}>{hint}</div>
         </div>
-
       </div>
 
       {showFeedback && (
-        <FeedbackModal sessionId={session.id} rated={done} onDone={onFeedbackDone} />
+        <FeedbackModal
+          sessionId={session.id}
+          rated={done}
+          onDone={onFeedbackDone}
+        />
       )}
     </div>
   );
@@ -516,7 +592,8 @@ const CONTACT_PHONE = "8147317111";
 
 function Welcome({ total, onBegin }) {
   const checkpoints = [];
-  for (let n = FEEDBACK_EVERY; n <= total; n += FEEDBACK_EVERY) checkpoints.push(n);
+  for (let n = FEEDBACK_EVERY; n <= total; n += FEEDBACK_EVERY)
+    checkpoints.push(n);
   const list =
     checkpoints.length > 1
       ? `${checkpoints.slice(0, -1).join(", ")}, and ${checkpoints.at(-1)}`
@@ -528,11 +605,11 @@ function Welcome({ total, onBegin }) {
         <h1>Instructions</h1>
         <p className="lead">Thank you for participating in this study.</p>
         <p>
-          Generative AI (GenAI) is increasingly being used by user experience (UX)
-          designers and web developers to create and modify digital user interfaces
-          (UIs). The purpose of this study is to investigate the extent to which
-          people can distinguish between human designed and AI generated user
-          interfaces.
+          Generative AI (GenAI) is increasingly being used by user experience
+          (UX) designers and web developers to create and modify digital user
+          interfaces (UIs). The purpose of this study is to investigate the
+          extent to which people can distinguish between human designed and AI
+          generated user interfaces.
         </p>
         <p>
           Your participation is anonymous. You will not be asked to provide your
@@ -546,29 +623,33 @@ function Welcome({ total, onBegin }) {
         </p>
         <ul>
           <li>One is the original human designed UI.</li>
-          <li>The other three are AI generated variants based on the original UI.</li>
+          <li>
+            The other three are AI generated variants based on the original UI.
+          </li>
           <li>The four variants will be presented in random order.</li>
         </ul>
 
         <p>For each set:</p>
         <ol type="a">
           <li>Carefully examine all four UI variants.</li>
-          <li>Select the variant you believe is the original human designed UI.</li>
           <li>
-            Indicate your confidence in your selection on a scale of 1 (not at all
-            confident) to 5 (extremely confident).
+            Select the variant you believe is the original human designed UI.
+          </li>
+          <li>
+            Indicate your confidence in your selection on a scale of 1 (not at
+            all confident) to 5 (extremely confident).
           </li>
         </ol>
 
         {list && (
           <p>
-            After every {FEEDBACK_EVERY}th set ({list}), you will also be asked to
-            briefly explain what characteristics influenced your selection.
+            After every {FEEDBACK_EVERY}th set ({list}), you will also be asked
+            to briefly explain what characteristics influenced your selection.
           </p>
         )}
         <p>
-          There are no penalties for incorrect answers. Please make each judgment
-          based on your own assessment of the interfaces.
+          There are no penalties for incorrect answers. Please make each
+          judgment based on your own assessment of the interfaces.
         </p>
         <p className="muted">
           If you have questions about the study, please email{" "}
@@ -605,12 +686,15 @@ function FeedbackModal({ sessionId, rated, onDone }) {
   };
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="fb-title">
+    <div
+      className="modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="fb-title"
+    >
       <form className="card modal" onSubmit={submit}>
         <h2 id="fb-title">Quick question</h2>
-        <p className="muted">
-          You've rated {rated} groups.
-        </p>
+        <p className="muted">You've rated {rated} groups.</p>
         <p className="modal-question">
           What characteristics of the interface most influenced your decision?
         </p>
@@ -623,7 +707,11 @@ function FeedbackModal({ sessionId, rated, onDone }) {
         />
         {error && <p className="error">{error}</p>}
         <div className="modal-actions">
-          <button className="btn primary" type="submit" disabled={busy || tooShort}>
+          <button
+            className="btn primary"
+            type="submit"
+            disabled={busy || tooShort}
+          >
             {busy ? "Saving…" : "Submit and continue"}
           </button>
         </div>
