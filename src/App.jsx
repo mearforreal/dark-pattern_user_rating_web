@@ -325,16 +325,19 @@ function StartForm({ onStart }) {
         ) : (
           <p className="muted">Generating your username…</p>
         )}
-        <button
-          type="button"
-          className="link-btn"
-          onClick={() => {
-            setResuming(true);
-            setError(null);
-          }}
-        >
-          Already have a username? Continue a previous session
-        </button>
+        <div className="returning">
+          <strong>Already have a username?</strong>
+          <button
+            type="button"
+            className="btn returning-btn"
+            onClick={() => {
+              setResuming(true);
+              setError(null);
+            }}
+          >
+            Continue a previous session →
+          </button>
+        </div>
       </div>
     </div>
   );
