@@ -187,102 +187,130 @@ function ConsentDeclined({ onBack }) {
 }
 
 function StartForm({ onStart }) {
-  const [mode, setMode] = useState("new");
-  const [value, setValue] = useState("");
   const [created, setCreated] = useState(null);
+  const [copied, setCopied] = useState(false);
+  const [resuming, setResuming] = useState(false);
+  const [username, setUsername] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const requested = useRef(false);
 
-  const switchMode = (m) => {
-    setMode(m);
-    setValue("");
+  // A username is generated as soon as the participant has agreed. The ref
+  // keeps StrictMode's double effect from creating two sessions.
+  const generate = useCallback(() => {
     setError(null);
+    api
+      .startSession()
+      .then(setCreated)
+      .catch((err) => setError(err.message));
+  }, []);
+  useEffect(() => {
+    if (requested.current) return;
+    requested.current = true;
+    generate();
+  }, [generate]);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(created.username);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
   };
 
-  const submit = async (e) => {
+  const resume = async (e) => {
     e.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      if (mode === "new") {
-        // Show the generated username before entering the study so the
-        // participant can note it down for later.
-        setCreated(await api.startSession(value));
-        setBusy(false);
-      } else {
-        onStart(await api.resumeSession(value));
-      }
+      // The username generated for this visit goes unused, so let the server
+      // discard its empty session.
+      onStart(await api.resumeSession(username, created?.id));
     } catch (err) {
       setError(err.message);
       setBusy(false);
     }
   };
 
-  if (created) {
+  if (resuming) {
     return (
       <div className="fill center page-bg">
-        <div className="card start">
-          <h1>Your username</h1>
-          <p className="username">{created.username}</p>
+        <form className="card start" onSubmit={resume}>
+          <h1>Continue your session</h1>
           <p className="muted">
-            Please write this down. Your progress is saved as you go: sign in
-            again with this username to continue where you left off.
+            Enter the username you were given to continue where you left off.
           </p>
-          <button className="btn primary" onClick={() => onStart(created)} autoFocus>
-            Continue
+          <label className="field">
+            <span>Username</span>
+            <input
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+              autoFocus
+              autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
+            />
+          </label>
+          {error && <p className="error">{error}</p>}
+          <button className="btn primary" type="submit" disabled={busy}>
+            {busy ? "Continuing…" : "Continue"}
           </button>
-        </div>
+          <button
+            type="button"
+            className="link-btn"
+            onClick={() => {
+              setResuming(false);
+              setError(null);
+            }}
+          >
+            Back to my new username
+          </button>
+        </form>
       </div>
     );
   }
 
   return (
     <div className="fill center page-bg">
-      <form className="card start" onSubmit={submit}>
-        <h1>Human vs. AI UI study</h1>
-        <div className="tabs" role="tablist">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === "new"}
-            className={mode === "new" ? "active" : ""}
-            onClick={() => switchMode("new")}
-          >
-            New participant
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === "resume"}
-            className={mode === "resume" ? "active" : ""}
-            onClick={() => switchMode("resume")}
-          >
-            Returning participant
-          </button>
-        </div>
-        <p className="muted">
-          {mode === "new"
-            ? "Enter a name (it does not need to be your real name). We will give you a username to continue later."
-            : "Enter the username you were given to continue where you left off."}
-        </p>
-        <label className="field">
-          <span>{mode === "new" ? "Name" : "Username"}</span>
-          <input
-            key={mode}
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            required
-            autoFocus
-            autoComplete={mode === "new" ? "name" : "username"}
-            autoCapitalize="none"
-            spellCheck={false}
-          />
-        </label>
-        {error && <p className="error">{error}</p>}
-        <button className="btn primary" type="submit" disabled={busy}>
-          {busy ? "Starting…" : mode === "new" ? "Start" : "Continue"}
+      <div className="card start">
+        <h1>Your username</h1>
+        {created ? (
+          <>
+            <div className="username-box">
+              <span className="username">{created.username}</span>
+              <button className="btn small" onClick={copy}>
+                {copied ? "Copied" : "Copy"}
+              </button>
+            </div>
+            <p className="muted">
+              Please write this down or copy it. Your progress is saved as you go:
+              use this username to continue where you left off if you leave the
+              study.
+            </p>
+            <button className="btn primary" onClick={() => onStart(created)} autoFocus>
+              I have saved it – Continue
+            </button>
+          </>
+        ) : error ? (
+          <>
+            <p className="error">{error}</p>
+            <button className="btn" onClick={generate}>Try again</button>
+          </>
+        ) : (
+          <p className="muted">Generating your username…</p>
+        )}
+        <button
+          type="button"
+          className="link-btn"
+          onClick={() => {
+            setResuming(true);
+            setError(null);
+          }}
+        >
+          Already have a username? Continue a previous session
         </button>
-      </form>
+      </div>
     </div>
   );
 }
@@ -461,7 +489,7 @@ function Rater({ data, onSignOut }) {
     return (
       <div className="fill center page-bg">
         <div className="card notice">
-          <h2>Thank you, {session.name}!</h2>
+          <h2>Thank you!</h2>
           <p className="muted">
             You rated all {total} groups. Your answers have been recorded.
           </p>
@@ -505,8 +533,7 @@ function Rater({ data, onSignOut }) {
           Group {idx + 1} of {total} · {done} rated
         </span>
         <span className="who">
-          {session.name}{" "}
-          {session.username && <span className="muted">· {session.username}</span>}
+          {session.username}
         </span>
         <button className="btn small" onClick={() => setShowWelcome(true)}>
           Instructions

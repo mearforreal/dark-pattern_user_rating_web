@@ -61,3 +61,7 @@ ALTER TABLE sessions ADD COLUMN IF NOT EXISTS consented_at TIMESTAMPTZ;
 -- migrate() in db.js. The email column is kept for sessions created before v4.
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS username TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS sessions_username_key ON sessions (username);
+
+-- v5: names are no longer collected; new sessions only get a generated
+-- username. name is kept (nullable) for sessions created before v5.
+ALTER TABLE sessions ALTER COLUMN name DROP NOT NULL;

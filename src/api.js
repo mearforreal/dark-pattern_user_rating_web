@@ -14,9 +14,9 @@ async function request(method, url, body, headers = {}) {
 }
 
 export const api = {
-  startSession: (name) => request("POST", "/api/sessions", { name, consent: true }),
-  resumeSession: (username) =>
-    request("POST", "/api/sessions/resume", { username, consent: true }),
+  startSession: () => request("POST", "/api/sessions", { consent: true }),
+  resumeSession: (username, discardId) =>
+    request("POST", "/api/sessions/resume", { username, discardId, consent: true }),
   getSession: (id) => request("GET", `/api/sessions/${id}`),
   select: (id, body) => request("POST", `/api/sessions/${id}/selections`, body),
   feedback: (id, reason) => request("POST", `/api/sessions/${id}/feedback`, { reason }),

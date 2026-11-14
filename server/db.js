@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,31 +26,39 @@ export async function migrate() {
   const sql = fs.readFileSync(path.join(__dirname, "schema.sql"), "utf8");
   await pool.query(sql);
   // Give sessions created before usernames existed one of their own.
-  const { rows } = await pool.query("SELECT id, name FROM sessions WHERE username IS NULL");
+  const { rows } = await pool.query("SELECT id FROM sessions WHERE username IS NULL");
   for (const r of rows) {
-    await withUniqueUsername(r.name, (username) =>
+    await withUniqueUsername((username) =>
       pool.query("UPDATE sessions SET username = $1 WHERE id = $2", [username, r.id]),
     );
   }
 }
 
-// "Alex Smith" -> "alexsmith-4821". The random suffix keeps usernames unique
-// and hard to guess, so one participant can't resume another's session.
-export function makeUsername(name) {
-  const base =
-    String(name)
-      .normalize("NFKD")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "")
-      .slice(0, 20) || "participant";
-  return `${base}-${String(Math.floor(Math.random() * 10000)).padStart(4, "0")}`;
+const ADJECTIVES = [
+  "amber", "bold", "brave", "bright", "calm", "clever", "cool", "crisp", "eager", "gentle",
+  "golden", "happy", "jolly", "keen", "kind", "lively", "lucky", "merry", "mild", "neat",
+  "noble", "proud", "quick", "quiet", "rapid", "sharp", "shiny", "silver", "smart", "sunny",
+  "swift", "tidy", "warm", "wise", "witty", "young",
+];
+const NOUNS = [
+  "badger", "bear", "beaver", "bison", "crane", "deer", "dolphin", "eagle", "falcon", "fox",
+  "gecko", "hawk", "heron", "koala", "lemur", "lion", "lynx", "moose", "otter", "owl",
+  "panda", "parrot", "penguin", "puffin", "rabbit", "raven", "robin", "seal", "swan", "tiger",
+  "turtle", "whale", "wolf", "zebra",
+];
+const pick = (list) => list[crypto.randomInt(list.length)];
+
+// e.g. "calm-otter-4821": easy to write down, and the random digits keep it
+// hard to guess, so one participant can't resume another's session.
+export function makeUsername() {
+  return `${pick(ADJECTIVES)}-${pick(NOUNS)}-${String(crypto.randomInt(10000)).padStart(4, "0")}`;
 }
 
 // Runs fn(username) with fresh usernames until it doesn't hit the unique index.
-export async function withUniqueUsername(name, fn) {
+export async function withUniqueUsername(fn) {
   for (let attempt = 0; ; attempt++) {
     try {
-      return await fn(makeUsername(name));
+      return await fn(makeUsername());
     } catch (e) {
       if (e.code !== "23505" || !String(e.constraint).includes("username") || attempt >= 20) throw e;
     }

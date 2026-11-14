@@ -134,27 +134,33 @@ kbd {
   gap: 14px;
 }
 .start p { margin: 0; }
-.start .username {
-  font-size: 24px;
-  font-weight: 600;
-  text-align: center;
-  padding: 12px;
+.username-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 14px;
   border: 1px dashed var(--accent);
   border-radius: 8px;
-  user-select: all;
 }
-.tabs { display: flex; gap: 4px; padding: 4px; background: #f0f2f5; border-radius: 8px; }
-.tabs button {
-  flex: 1;
-  padding: 7px 10px;
+.username-box .username {
+  font-size: 22px;
+  font-weight: 600;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  user-select: all;
+  overflow-wrap: anywhere;
+}
+.link-btn {
+  align-self: center;
   border: 0;
-  border-radius: 6px;
-  background: transparent;
+  background: none;
+  padding: 2px;
   font: inherit;
   font-size: 14px;
+  color: var(--accent);
   cursor: pointer;
+  text-decoration: underline;
 }
-.tabs button.active { background: #fff; font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); }
 .field {
   display: flex;
   flex-direction: column;

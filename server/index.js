@@ -68,18 +68,16 @@ async function buildPlan(sessionId) {
 
 // ---------------------------------------------------------- participants ---
 
-const SESSION_FIELDS = "id, name, username, started_at";
+const SESSION_FIELDS = "id, username, started_at";
 
-// New participant: create a session with a username generated from their name.
+// New participant: create a session with a generated username.
 app.post("/api/sessions", wrap(async (req, res) => {
-  const name = String(req.body?.name || "").trim().slice(0, 200);
-  if (!name) return res.status(400).json({ error: "Name is required" });
   if (req.body?.consent !== true) return res.status(400).json({ error: "Consent is required" });
-  const { rows: [s] } = await withUniqueUsername(name, (username) =>
+  const { rows: [s] } = await withUniqueUsername((username) =>
     pool.query(
-      `INSERT INTO sessions (name, username, user_agent, consented_at) VALUES ($1, $2, $3, now())
+      `INSERT INTO sessions (username, user_agent, consented_at) VALUES ($1, $2, now())
        RETURNING ${SESSION_FIELDS}`,
-      [name, username, String(req.get("user-agent") || "").slice(0, 500)],
+      [username, String(req.get("user-agent") || "").slice(0, 500)],
     ),
   );
   res.status(201).json({ ...s, resumed: false });
@@ -98,6 +96,17 @@ app.post("/api/sessions/resume", wrap(async (req, res) => {
     [username],
   );
   if (!s) return res.status(404).json({ error: "No participant found with that username" });
+  // Drop the session generated for this visit if the participant never used it.
+  const discardId = String(req.body?.discardId || "");
+  if (UUID_RE.test(discardId) && discardId !== s.id) {
+    await pool.query(
+      `DELETE FROM sessions se
+        WHERE se.id = $1
+          AND NOT EXISTS (SELECT 1 FROM selections WHERE session_id = se.id)
+          AND NOT EXISTS (SELECT 1 FROM feedback WHERE session_id = se.id)`,
+      [discardId],
+    );
+  }
   res.json({ ...s, resumed: true });
 }));
 
@@ -124,7 +133,7 @@ app.get("/api/sessions/:id", wrap(async (req, res) => {
     pool.query("SELECT count(*)::int AS n FROM feedback WHERE session_id = $1", [s.id]),
   ]);
   res.json({
-    session: { id: s.id, name: s.name, username: s.username, started_at: s.started_at, completed_at: s.completed_at },
+    session: { id: s.id, username: s.username, started_at: s.started_at, completed_at: s.completed_at },
     groups: plan,
     selections: Object.fromEntries(
       sel.rows.map((r) => [r.group_stem, { imageId: r.image_id, confidence: r.confidence }]),

@@ -166,7 +166,7 @@ function Dashboard({ client, onLogout }) {
     if (!q) return sessions;
     return sessions.filter(
       (s) =>
-        s.name.toLowerCase().includes(q) ||
+        (s.name || "").toLowerCase().includes(q) ||
         (s.username || "").includes(q) ||
         (s.email || "").includes(q)
     );
@@ -227,7 +227,7 @@ function Dashboard({ client, onLogout }) {
                       className={`clickable${selected === s.id ? " active" : ""}`}
                       onClick={() => setSelected(s.id)}
                     >
-                      <td>{s.name}</td>
+                      <td>{s.name || "—"}</td>
                       <td className="muted">{s.username || "—"}</td>
                       <td>{fmtDate(s.started_at)}</td>
                       <td>{fmtDuration(s.duration_s)}</td>
@@ -486,7 +486,7 @@ function SessionDrawer({ id, client, onClose, onDeleted }) {
     <div className="drawer-backdrop" onClick={onClose}>
       <aside className="drawer" onClick={(e) => e.stopPropagation()}>
         <div className="drawer-hdr">
-          <h2>{s ? s.name : "Session"}</h2>
+          <h2>{s ? s.username || s.name : "Session"}</h2>
           <button className="btn small" onClick={onClose}>Close</button>
         </div>
         {error && <p className="error">{error}</p>}
