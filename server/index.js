@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
-import { pool, migrate } from "./db.js";
+import { pool, migrate, withUniqueUsername } from "./db.js";
 import { hashStr, seededShuffle } from "../src/shuffle.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -13,7 +13,6 @@ const distDir = path.join(root, "dist");
 const PORT = Number(process.env.PORT) || 3001;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
 const UUID_RE = /^[0-9a-f-]{36}$/i;
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function safeEqual(a, b) {
   const x = Buffer.from(String(a));
@@ -69,24 +68,37 @@ async function buildPlan(sessionId) {
 
 // ---------------------------------------------------------- participants ---
 
+const SESSION_FIELDS = "id, name, username, started_at";
+
+// New participant: create a session with a username generated from their name.
 app.post("/api/sessions", wrap(async (req, res) => {
   const name = String(req.body?.name || "").trim().slice(0, 200);
-  const email = String(req.body?.email || "").trim().toLowerCase().slice(0, 320);
   if (!name) return res.status(400).json({ error: "Name is required" });
-  if (!EMAIL_RE.test(email)) return res.status(400).json({ error: "A valid email is required" });
   if (req.body?.consent !== true) return res.status(400).json({ error: "Consent is required" });
-  // Email is unique: a returning participant gets their existing session back
-  // (name and start time are kept) and continues where they left off.
-  const { rows: [s] } = await pool.query(
-    `INSERT INTO sessions (name, email, user_agent, consented_at) VALUES ($1, $2, $3, now())
-     ON CONFLICT (email) DO UPDATE
-       SET last_active_at = now(),
-           consented_at = COALESCE(sessions.consented_at, now())
-     RETURNING id, name, email, started_at, (xmax = 0) AS created`,
-    [name, email, String(req.get("user-agent") || "").slice(0, 500)],
+  const { rows: [s] } = await withUniqueUsername(name, (username) =>
+    pool.query(
+      `INSERT INTO sessions (name, username, user_agent, consented_at) VALUES ($1, $2, $3, now())
+       RETURNING ${SESSION_FIELDS}`,
+      [name, username, String(req.get("user-agent") || "").slice(0, 500)],
+    ),
   );
-  const { created, ...session } = s;
-  res.status(created ? 201 : 200).json({ ...session, resumed: !created });
+  res.status(201).json({ ...s, resumed: false });
+}));
+
+// Returning participant: continue the session that belongs to a username.
+app.post("/api/sessions/resume", wrap(async (req, res) => {
+  const username = String(req.body?.username || "").trim().toLowerCase().slice(0, 100);
+  if (!username) return res.status(400).json({ error: "Username is required" });
+  if (req.body?.consent !== true) return res.status(400).json({ error: "Consent is required" });
+  const { rows: [s] } = await pool.query(
+    `UPDATE sessions
+        SET last_active_at = now(), consented_at = COALESCE(consented_at, now())
+      WHERE username = $1
+      RETURNING ${SESSION_FIELDS}`,
+    [username],
+  );
+  if (!s) return res.status(404).json({ error: "No participant found with that username" });
+  res.json({ ...s, resumed: true });
 }));
 
 async function loadSession(req, res) {
@@ -112,7 +124,7 @@ app.get("/api/sessions/:id", wrap(async (req, res) => {
     pool.query("SELECT count(*)::int AS n FROM feedback WHERE session_id = $1", [s.id]),
   ]);
   res.json({
-    session: { id: s.id, name: s.name, email: s.email, started_at: s.started_at, completed_at: s.completed_at },
+    session: { id: s.id, name: s.name, username: s.username, started_at: s.started_at, completed_at: s.completed_at },
     groups: plan,
     selections: Object.fromEntries(
       sel.rows.map((r) => [r.group_stem, { imageId: r.image_id, confidence: r.confidence }]),
@@ -239,7 +251,7 @@ app.get("/api/admin/stats", wrap(async (_req, res) => {
 
 app.get("/api/admin/sessions", wrap(async (_req, res) => {
   const { rows } = await pool.query(`
-    SELECT se.id, se.name, se.email, se.started_at, se.last_active_at, se.completed_at,
+    SELECT se.id, se.name, se.username, se.email, se.started_at, se.last_active_at, se.completed_at,
            EXTRACT(EPOCH FROM (COALESCE(se.completed_at, se.last_active_at) - se.started_at))::int
              AS duration_s,
            count(sl.id)::int AS picks,
@@ -289,7 +301,7 @@ function csvCell(v) {
 
 app.get("/api/admin/export.csv", wrap(async (_req, res) => {
   const { rows } = await pool.query(`
-    SELECT se.id AS session_id, se.name, se.email, se.consented_at,
+    SELECT se.id AS session_id, se.name, se.username, se.email, se.consented_at,
            se.started_at AS session_started_at,
            se.completed_at AS session_completed_at,
            EXTRACT(EPOCH FROM (COALESCE(se.completed_at, se.last_active_at) - se.started_at))::int

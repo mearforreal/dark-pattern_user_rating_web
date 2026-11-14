@@ -187,54 +187,100 @@ function ConsentDeclined({ onBack }) {
 }
 
 function StartForm({ onStart }) {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [mode, setMode] = useState("new");
+  const [value, setValue] = useState("");
+  const [created, setCreated] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+
+  const switchMode = (m) => {
+    setMode(m);
+    setValue("");
+    setError(null);
+  };
 
   const submit = async (e) => {
     e.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      onStart(await api.startSession(name, email));
+      if (mode === "new") {
+        // Show the generated username before entering the study so the
+        // participant can note it down for later.
+        setCreated(await api.startSession(value));
+        setBusy(false);
+      } else {
+        onStart(await api.resumeSession(value));
+      }
     } catch (err) {
       setError(err.message);
       setBusy(false);
     }
   };
 
+  if (created) {
+    return (
+      <div className="fill center page-bg">
+        <div className="card start">
+          <h1>Your username</h1>
+          <p className="username">{created.username}</p>
+          <p className="muted">
+            Please write this down. Your progress is saved as you go: sign in
+            again with this username to continue where you left off.
+          </p>
+          <button className="btn primary" onClick={() => onStart(created)} autoFocus>
+            Continue
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fill center page-bg">
       <form className="card start" onSubmit={submit}>
         <h1>Human vs. AI UI study</h1>
+        <div className="tabs" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "new"}
+            className={mode === "new" ? "active" : ""}
+            onClick={() => switchMode("new")}
+          >
+            New participant
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "resume"}
+            className={mode === "resume" ? "active" : ""}
+            onClick={() => switchMode("resume")}
+          >
+            Returning participant
+          </button>
+        </div>
         <p className="muted">
-          Sign in with your name and email. Your progress is saved as you go:
-          sign in again with the same email to continue where you left off.
+          {mode === "new"
+            ? "Enter a name (it does not need to be your real name). We will give you a username to continue later."
+            : "Enter the username you were given to continue where you left off."}
         </p>
         <label className="field">
-          <span>Name</span>
+          <span>{mode === "new" ? "Name" : "Username"}</span>
           <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+            key={mode}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
             required
             autoFocus
-            autoComplete="name"
-          />
-        </label>
-        <label className="field">
-          <span>Email</span>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            autoComplete="email"
+            autoComplete={mode === "new" ? "name" : "username"}
+            autoCapitalize="none"
+            spellCheck={false}
           />
         </label>
         {error && <p className="error">{error}</p>}
         <button className="btn primary" type="submit" disabled={busy}>
-          {busy ? "Starting…" : "Start"}
+          {busy ? "Starting…" : mode === "new" ? "Start" : "Continue"}
         </button>
       </form>
     </div>
@@ -460,7 +506,7 @@ function Rater({ data, onSignOut }) {
         </span>
         <span className="who">
           {session.name}{" "}
-          {session.email && <span className="muted">· {session.email}</span>}
+          {session.username && <span className="muted">· {session.username}</span>}
         </span>
         <button className="btn small" onClick={() => setShowWelcome(true)}>
           Instructions

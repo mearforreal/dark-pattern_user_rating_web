@@ -165,7 +165,10 @@ function Dashboard({ client, onLogout }) {
     const q = query.trim().toLowerCase();
     if (!q) return sessions;
     return sessions.filter(
-      (s) => s.name.toLowerCase().includes(q) || (s.email || "").includes(q)
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        (s.username || "").includes(q) ||
+        (s.email || "").includes(q)
     );
   }, [sessions, query]);
 
@@ -191,7 +194,7 @@ function Dashboard({ client, onLogout }) {
             <h2>Participants</h2>
             <input
               className="search"
-              placeholder="Search name or email"
+              placeholder="Search name or username"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -206,7 +209,7 @@ function Dashboard({ client, onLogout }) {
                 <thead>
                   <tr>
                     <th>Name</th>
-                    <th>Email</th>
+                    <th>Username</th>
                     <th>Started</th>
                     <th>Session time</th>
                     <th className="num-col">Rated</th>
@@ -225,7 +228,7 @@ function Dashboard({ client, onLogout }) {
                       onClick={() => setSelected(s.id)}
                     >
                       <td>{s.name}</td>
-                      <td className="muted">{s.email || "—"}</td>
+                      <td className="muted">{s.username || "—"}</td>
                       <td>{fmtDate(s.started_at)}</td>
                       <td>{fmtDuration(s.duration_s)}</td>
                       <td className="num-col">{s.picks}{stats ? ` / ${stats.totals.groups}` : ""}</td>
@@ -492,7 +495,8 @@ function SessionDrawer({ id, client, onClose, onDeleted }) {
         ) : (
           <>
             <dl className="meta">
-              <dt>Email</dt><dd>{s.email || "—"}</dd>
+              <dt>Username</dt><dd>{s.username || "—"}</dd>
+              {s.email && <><dt>Email</dt><dd>{s.email}</dd></>}
               <dt>Consented</dt><dd>{fmtDate(s.consented_at)}</dd>
               <dt>Started</dt><dd>{fmtDate(s.started_at)}</dd>
               <dt>Last activity</dt><dd>{fmtDate(s.last_active_at)}</dd>

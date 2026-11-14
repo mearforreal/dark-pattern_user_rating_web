@@ -55,3 +55,9 @@ ALTER TABLE selections ADD COLUMN IF NOT EXISTS confidence SMALLINT
 -- v3: participants must accept the informed consent form before signing in.
 -- consented_at is set on first sign-in; NULL for sessions created before v3.
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS consented_at TIMESTAMPTZ;
+
+-- v4: participants sign in with a generated username (name slug + 4 digits,
+-- e.g. alex-4821) instead of an email. Existing rows are backfilled by
+-- migrate() in db.js. The email column is kept for sessions created before v4.
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS username TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS sessions_username_key ON sessions (username);
