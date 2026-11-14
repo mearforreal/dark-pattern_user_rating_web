@@ -218,6 +218,21 @@ function StartForm({ onStart }) {
     } catch {}
   };
 
+  const download = () => {
+    const text =
+      "Human vs. AI UI study\n\n" +
+      `Your anonymous study username: ${created.username}\n\n` +
+      "Keep this username until you have completed the study. If you leave\n" +
+      "before finishing, use it to return and continue where you left off.\n";
+    const url = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `study-username-${created.username}.txt`;
+    a.click();
+    // Safari can cancel the download if the URL is revoked right away.
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
   const resume = async (e) => {
     e.preventDefault();
     setBusy(true);
@@ -274,22 +289,32 @@ function StartForm({ onStart }) {
   return (
     <div className="fill center page-bg">
       <div className="card start">
-        <h1>Your username</h1>
+        <h1>Your Anonymous Study Username</h1>
         {created ? (
           <>
+            <p>
+              Please save or copy this username before continuing. It is your
+              unique anonymous code for this study. Your progress will be saved
+              automatically. If you leave before completing the study, you will
+              need this username to return and continue where you left off.
+            </p>
             <div className="username-box">
               <span className="username">{created.username}</span>
-              <button className="btn small" onClick={copy}>
-                {copied ? "Copied" : "Copy"}
+            </div>
+            <div className="username-actions">
+              <button className="btn" onClick={copy}>
+                {copied ? "Copied" : "Copy Username"}
+              </button>
+              <button className="btn" onClick={download}>
+                Download as .txt
               </button>
             </div>
-            <p className="muted">
-              Please write this down or copy it. Your progress is saved as you go:
-              use this username to continue where you left off if you leave the
-              study.
+            <p className="important">
+              <strong>Important:</strong> Keep this username until you have
+              completed the study.
             </p>
             <button className="btn primary" onClick={() => onStart(created)} autoFocus>
-              I have saved it – Continue
+              I have saved my username — Continue
             </button>
           </>
         ) : error ? (

@@ -150,6 +150,15 @@ kbd {
   user-select: all;
   overflow-wrap: anywhere;
 }
+.username-actions { display: flex; gap: 10px; }
+.username-actions .btn { flex: 1; }
+.start .important {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff7e6;
+  color: #7a4b00;
+  font-size: 14px;
+}
 .link-btn {
   align-self: center;
   border: 0;

@@ -56,8 +56,8 @@ ALTER TABLE selections ADD COLUMN IF NOT EXISTS confidence SMALLINT
 -- consented_at is set on first sign-in; NULL for sessions created before v3.
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS consented_at TIMESTAMPTZ;
 
--- v4: participants sign in with a generated username (name slug + 4 digits,
--- e.g. alex-4821) instead of an email. Existing rows are backfilled by
+-- v4: participants sign in with a generated username (e.g. calm-otter-4821)
+-- instead of an email. Existing rows are backfilled by
 -- migrate() in db.js. The email column is kept for sessions created before v4.
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS username TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS sessions_username_key ON sessions (username);
@@ -65,3 +65,5 @@ CREATE UNIQUE INDEX IF NOT EXISTS sessions_username_key ON sessions (username);
 -- v5: names are no longer collected; new sessions only get a generated
 -- username. name is kept (nullable) for sessions created before v5.
 ALTER TABLE sessions ALTER COLUMN name DROP NOT NULL;
+-- Some databases were created with email NOT NULL; new sessions have none.
+ALTER TABLE sessions ALTER COLUMN email DROP NOT NULL;
